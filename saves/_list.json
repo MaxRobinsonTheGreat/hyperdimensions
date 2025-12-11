@@ -1,0 +1,18 @@
+[
+    {
+        "file": "sphere_tutorial.json",
+        "name": "Sphere (Tutorial)"
+    },
+    {
+        "file": "shell.json",
+        "name": "Shell"
+    },
+    {
+        "file": "flower.json",
+        "name": "Flower"
+    },
+    {
+        "file": "planet.json",
+        "name": "Planet"
+    }
+]

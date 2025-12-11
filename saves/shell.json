@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1,
+    "shininess": 100
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 1,
+    "vMin": 0,
+    "vMax": 1,
+    "uSegs": 150,
+    "vSegs": 150
+  },
+  "extraParameters": [
+    {
+      "name": "t",
+      "value": 1,
+      "min": 0,
+      "max": 2,
+      "step": 0.001,
+      "runtime": 8
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const t = input.t;\n \n    // Map u to spiral angle (3 full turns)\n    const angleLimit = 6 * Math.PI;\n    const spiralAngle = u * angleLimit;\n     \n    // Map v to tube angle\n    const tubeAngle = v * 2 * Math.PI;\n \n    // Nautilus / Logarithmic Spiral parameters\n    const baseRadius = 1; \n    const k = 0.15; \n    const R = baseRadius * Math.exp(k * spiralAngle);\n    \n    // Tube radius grows with the spiral\n    const growthFactor = Math.exp(k * 2 * Math.PI * t);\n    const tubeRadius = R * (growthFactor - 1) * 0.5 * 0.95; \n     \n    const x = (R + tubeRadius * Math.cos(tubeAngle)) * Math.cos(spiralAngle);\n    const y = (R + tubeRadius * Math.cos(tubeAngle)) * Math.sin(spiralAngle);\n    const z = tubeRadius * Math.sin(tubeAngle);\n \n    // Coloring Logic\n    const stripeFrequency = 10; \n    const stripeIntensity = Math.pow(Math.sin(spiralAngle * stripeFrequency), 4);\n     \n    const baseR = 0.95, baseG = 0.90, baseB = 0.80;\n    const stripeR = 0.6, stripeG = 0.3, stripeB = 0.1;\n     \n    const r = baseR * (1 - stripeIntensity) + stripeR * stripeIntensity;\n    const g = baseG * (1 - stripeIntensity) + stripeG * stripeIntensity;\n    const b = baseB * (1 - stripeIntensity) + stripeB * stripeIntensity;\n    const a = 1.0;\n     \n    return { x, y, z, r, g, b, a };\n }"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

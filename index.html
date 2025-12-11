@@ -26,33 +26,6 @@
                     <h2>Function Controls</h2>
                     <button id="toggleSidebar">«</button>
                 </div>
-                <div class="sidebar-header-actions">
-                    <button id="saveConfig">Save</button>
-                    <button id="loadConfig">Load</button>
-                </div>
-                <div class="sidebar-header-panel" id="sidebarHeaderPanel" style="display: none;">
-                    <div id="savePanel" class="header-panel" style="display: none;">
-                        <div class="header-panel-row">
-                            <label for="saveName">Save As:</label>
-                            <input type="text" id="saveName" placeholder="Name">
-                            <button id="downloadSave">Download</button>
-                        </div>
-                    </div>
-                    <div id="loadPanel" class="header-panel" style="display: none;">
-                        <div class="header-panel-row">
-                            <label for="loadPreset">Choose Save File:</label>
-                            <select id="loadPreset">
-                                <option value="shell">shell</option>
-                            </select>
-                            <button id="loadPresetBtn">Load</button>
-                        </div>
-                        <div class="header-panel-or">or</div>
-                        <div class="header-panel-row">
-                            <button id="uploadSaveBtn">Upload Save File</button>
-                            <input type="file" id="uploadSaveInput" style="display: none;">
-                        </div>
-                    </div>
-                </div>
             </div>
 
             <div id="controlsBody">
@@ -206,9 +179,32 @@
             </div>
 
             <div id="sidebar-footer">
-                <div class="button-row">
+                <div class="footer-buttons-grid">
                     <button id="applySurface" disabled>Apply</button>
                     <button id="revertSurface" disabled>Revert</button>
+                    <button id="saveConfig">Save</button>
+                    <button id="loadConfig">Load</button>
+                </div>
+                <div class="sidebar-footer-panel" id="sidebarHeaderPanel" style="display: none;">
+                    <div id="savePanel" class="header-panel" style="display: none;">
+                        <div class="header-panel-row">
+                            <label for="saveName">Save As:</label>
+                            <input type="text" id="saveName" placeholder="Name">
+                            <button id="downloadSave">Download</button>
+                        </div>
+                    </div>
+                    <div id="loadPanel" class="header-panel" style="display: none;">
+                        <div class="header-panel-row header-panel-row-load">
+                            <label for="loadPreset">Choose Saved:</label>
+                            <select id="loadPreset">
+                                <option value="shell">shell</option>
+                            </select>
+                            <button id="loadPresetBtn">Load</button>
+                            <span class="header-panel-or-inline">~or~</span>
+                            <button id="uploadSaveBtn">Upload Custom</button>
+                            <input type="file" id="uploadSaveInput" style="display: none;">
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

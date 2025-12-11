@@ -112,6 +112,21 @@ body {
     margin-top: 4px;
 }
 
+.header-panel-row-load {
+    flex-wrap: nowrap;
+}
+
+.header-panel-row-load select {
+    flex: 1;
+    min-width: 0;
+}
+
+.header-panel-or-inline {
+    font-size: 0.8rem;
+    color: #888;
+    white-space: nowrap;
+}
+
 .header-panel-row label {
     font-size: 0.85rem;
     color: #aaa;
@@ -239,6 +254,7 @@ body {
 .control-group-inline button,
 .button-row button,
 .sidebar-header-actions button,
+.footer-buttons-grid button,
 .header-panel-row button {
     background: #444;
     color: #eee;
@@ -254,6 +270,7 @@ body {
 .control-group-inline button:hover,
 .button-row button:hover,
 .sidebar-header-actions button:hover,
+.footer-buttons-grid button:hover,
 .header-panel-row button:hover {
     background: #555;
 }
@@ -262,6 +279,7 @@ body {
 .control-group-inline button:active,
 .button-row button:active,
 .sidebar-header-actions button:active,
+.footer-buttons-grid button:active,
 .header-panel-row button:active {
     background: #666;
     transform: translateY(1px);
@@ -415,6 +433,23 @@ body {
 #sidebar-footer {
     padding: 8px 8px 8px 8px;
     border-top: 1px solid #444;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.footer-buttons-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.footer-buttons-grid button {
+    width: 100%;
+}
+
+.sidebar-footer-panel {
+    margin-top: 2px;
 }
 
 .floating-button {

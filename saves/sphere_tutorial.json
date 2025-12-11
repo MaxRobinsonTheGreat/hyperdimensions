@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1,
+    "shininess": 100
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.29,
+    "vMin": 0,
+    "vMax": 6.29,
+    "uSegs": 150,
+    "vSegs": 150
+  },
+  "extraParameters": [
+    {
+      "name": "radius",
+      "value": 4.417,
+      "min": 0.01,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 8
+    }
+  ],
+  "surface": {
+    "code": "// the function \"surface\" defines a colored parametric surface, this one is a sphere\n// the function takes an input object, which always has a \"u\" and \"v\" value\n// input may also have arbitrary parameters, like t, that are defined in the UI above\n\n// the function returns an object with values {x,y,z,r,g,b,a}\n// xyz defines coordinates, rgb defines color, a defines transparency\n// rgba values are clipped between 0-1\n// all values default to 1 if not explicitly returned\n\n// both the \"Math\" and \"math\" libraries are available, \n// allowing complex mathematical operations\n\nfunction surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const radius = input.radius;\n    \n    const x = Math.cos(u)*Math.sin(v)*radius;\n    const y = Math.cos(u)*Math.cos(v)*radius;\n    const z = Math.sin(u)*radius;\n \n    const r = x/radius; // normalize colors to radius\n    const g = y/radius;\n    const b = z/radius;\n    const a = 1.0;\n     \n    return { x, y, z, r, g, b, a };\n }"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

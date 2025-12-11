@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": true,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1,
+    "shininess": 30
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 1,
+    "vMin": 0,
+    "vMax": 1,
+    "uSegs": 200,
+    "vSegs": 150
+  },
+  "extraParameters": [
+    {
+      "name": "t",
+      "value": 0,
+      "min": 0,
+      "max": 100,
+      "step": 0.01,
+      "runtime": 100
+    },
+    {
+      "name": "radius",
+      "value": 3.5,
+      "min": 1,
+      "max": 10,
+      "step": 0.1,
+      "runtime": 8
+    },
+    {
+      "name": "detailScale",
+      "value": 2.5,
+      "min": 0.5,
+      "max": 10,
+      "step": 0.1,
+      "runtime": 8
+    },
+    {
+      "name": "heightScale",
+      "value": 0.35,
+      "min": 0,
+      "max": 2,
+      "step": 0.01,
+      "runtime": 8
+    },
+    {
+      "name": "waterLevel",
+      "value": 0.45,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "runtime": 8
+    },
+    {
+      "name": "spinSpeed",
+      "value": 0.1,
+      "min": -0.5,
+      "max": 0.5,
+      "step": 0.01,
+      "runtime": 8
+    },
+    {
+      "name": "cloudSpeed",
+      "value": 0.15,
+      "min": -0.5,
+      "max": 0.5,
+      "step": 0.01,
+      "runtime": 8
+    },
+    {
+      "name": "cloudDensity",
+      "value": 0.45,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "runtime": 8
+    },
+    {
+      "name": "poleIce",
+      "value": 0.1,
+      "min": 0,
+      "max": 0.5,
+      "step": 0.01,
+      "runtime": 8
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u; // 0..1 (from UI mapping)\n    const v = input.v; // 0..1\n    const t = input.t || 0;\n\n    // --- Parameters ---\n    const radius        = input.radius        || 3.5;\n    const detailScale   = input.detailScale   || 2.5;\n    const heightScale   = input.heightScale   || 0.35;\n    const waterLevel    = input.waterLevel    || 0.45;\n    const spinSpeed     = input.spinSpeed     || 0.1;\n    const cloudSpeed    = input.cloudSpeed    || 0.15;\n    const cloudDensity  = input.cloudDensity  || 0.45;\n    const poleIce       = input.poleIce       || 0.1;\n    \n    const PI = Math.PI;\n    const TWO_PI = Math.PI * 2;\n    \n    // Helper: Linear Interpolation\n    function lerp(a, b, t) {\n        return a + t * (b - a);\n    }\n\n    // Helper: Smoothstep\n    function smoothstep(min, max, value) {\n        var x = Math.max(0, Math.min(1, (value - min) / (max - min)));\n        return x * x * (3 - 2 * x);\n    }\n\n    // Helper: Simple Hash\n    function hash(n) {\n        return Math.abs(Math.sin(n) * 43758.5453123) % 1;\n    }\n\n    // Helper: 3D Value Noise\n    function noise(x, y, z) {\n        const p = {\n            x: Math.floor(x),\n            y: Math.floor(y),\n            z: Math.floor(z)\n        };\n        const f = {\n            x: x - p.x,\n            y: y - p.y,\n            z: z - p.z\n        };\n        \n        // Quintic easing\n        const smooth = (t) => t * t * t * (t * (t * 6 - 15) + 10);\n        f.x = smooth(f.x);\n        f.y = smooth(f.y);\n        f.z = smooth(f.z);\n        \n        const n = p.x + p.y * 57.0 + p.z * 113.0;\n        \n        return lerp(lerp(lerp(hash(n + 0.0), hash(n + 1.0), f.x),\n                         lerp(hash(n + 57.0), hash(n + 58.0), f.x), f.y),\n                    lerp(lerp(hash(n + 113.0), hash(n + 114.0), f.x),\n                         lerp(hash(n + 170.0), hash(n + 171.0), f.x), f.y), f.z);\n    }\n    \n    // Helper: Fractal Brownian Motion\n    function fbm(x, y, z, octaves, persistence, lacunarity) {\n        let total = 0;\n        let amplitude = 1;\n        let frequency = 1;\n        let maxValue = 0;\n        for(let i=0; i<octaves; i++) {\n            total += noise(x * frequency, y * frequency, z * frequency) * amplitude;\n            maxValue += amplitude;\n            amplitude *= persistence;\n            frequency *= lacunarity;\n        }\n        return total / maxValue;\n    }\n\n    // --- Geometry Calculation ---\n    \n    // Convert u,v to spherical angles\n    // u goes 0..1 -> 0..2PI (Longitude)\n    // v goes 0..1 -> 0..PI  (Latitude)\n    const theta = u * TWO_PI;\n    const phi   = v * PI;\n    \n    // Base sphere unit normal\n    // (using Z-up convention to match typical globe visualization in this view)\n    const nx = Math.sin(phi) * Math.cos(theta);\n    const ny = Math.sin(phi) * Math.sin(theta);\n    const nz = Math.cos(phi);\n    \n    // Spin Rotation: Rotate the coordinate system we use for NOISE sampling\n    // This makes the planet terrain 'move' across the surface of the sphere\n    const angle = t * spinSpeed;\n    const ca = Math.cos(angle);\n    const sa = Math.sin(angle);\n    \n    // Rotate around Z axis\n    const rx = nx * ca - ny * sa;\n    const ry = nx * sa + ny * ca;\n    const rz = nz;\n    \n    // Terrain Noise Sampling\n    // Scale the coordinates\n    const sx = rx * detailScale;\n    const sy = ry * detailScale;\n    const sz = rz * detailScale;\n    \n    // Elevation (0.0 to 1.0)\n    let elevation = fbm(sx, sy, sz, 6, 0.5, 2.0);\n    \n    // Determine Land/Water\n    let isWater = false;\n    let surfHeight = 0;\n    \n    if (elevation < waterLevel) {\n        isWater = true;\n        // Ocean is at 'sea level' (radius)\n        surfHeight = 0;\n    } else {\n        // Land rises above water level\n        // Remap (waterLevel .. 1.0) -> (0.0 .. 1.0)\n        const landVal = (elevation - waterLevel) / (1.0 - waterLevel);\n        // Apply height scale\n        surfHeight = landVal * heightScale;\n    }\n    \n    // Final Position\n    const rFinal = radius * (1.0 + surfHeight);\n    const x = nx * rFinal;\n    const y = ny * rFinal;\n    const z = nz * rFinal;\n    \n    // --- Coloring ---\n    let r=0, g=0, b=0;\n    const polar = Math.abs(nz); // 0 at equator, 1 at poles\n    \n    if (isWater) {\n        // Ocean\n        // Depth based coloring\n        // Deeper water is 'lower' elevation (further from waterLevel)\n        const depth = (waterLevel - elevation) / waterLevel;\n        const shallow = {r: 0.0, g: 0.5, b: 0.8}; // Turquoise\n        const deep    = {r: 0.0, g: 0.05, b: 0.2}; // Dark Blue\n        \n        const mix = Math.min(1, depth * 1.5);\n        r = lerp(shallow.r, deep.r, mix);\n        g = lerp(shallow.g, deep.g, mix);\n        b = lerp(shallow.b, deep.b, mix);\n        \n        // Optional: Simple specular reflection if you wanted\n    } else {\n        // Land\n        // Colors\n        const sand  = {r: 0.85, g: 0.75, b: 0.55};\n        const green = {r: 0.15, g: 0.55, b: 0.10};\n        const brown = {r: 0.40, g: 0.35, b: 0.30};\n        const white = {r: 0.95, g: 0.95, b: 1.00};\n        \n        const landH = (elevation - waterLevel) / (1.0 - waterLevel); // 0..1\n        \n        if (landH < 0.04) {\n            // Beach\n            r = sand.r; g = sand.g; b = sand.b;\n        } else if (landH < 0.4 && polar < (1.0 - poleIce)) {\n            // Vegetation\n            // Variance based on another noise lookup for 'forests'\n            const veg = fbm(sx*3.5, sy*3.5, sz*3.5, 2, 0.5, 2.0);\n            r = green.r * (0.8 + 0.4 * veg);\n            g = green.g * (0.8 + 0.4 * veg);\n            b = green.b * (0.6 + 0.2 * veg);\n        } else if (landH < 0.7 && polar < (1.0 - poleIce)) {\n            // Mountain Rock\n            r = brown.r; g = brown.g; b = brown.b;\n        } else {\n            // Snow peaks or polar caps\n            r = white.r; g = white.g; b = white.b;\n        }\n    }\n    \n    // Polar Caps Override\n    // Simple latitude check\n    // Smooth boundary\n    if (polar > (1.0 - poleIce)) {\n         // Make it snow color, but blend edge\n         const edge = (polar - (1.0 - poleIce)) / 0.1;\n         const alpha = Math.min(1, edge * 5.0);\n         if (alpha >= 1) {\n             r=0.95; g=0.95; b=1.0;\n         } else {\n             r = lerp(r, 0.95, alpha);\n             g = lerp(g, 0.95, alpha);\n             b = lerp(b, 1.0, alpha);\n         }\n    }\n    \n    // --- Atmosphere / Clouds ---\n    // Separate noise spin for clouds\n    const cAngle = t * (spinSpeed + cloudSpeed);\n    const cca = Math.cos(cAngle);\n    const csa = Math.sin(cAngle);\n    \n    // Rotated coords for clouds\n    const cx_ = nx * cca - ny * csa;\n    const cy_ = nx * csa + ny * cca;\n    \n    // Cloud noise\n    // Offset coordinates to make it distinct from terrain\n    const cNoise = fbm(cx_ + 123.4, cy_ + 567.8, rz + 901.2, 4, 0.5, 2.0);\n    \n    // Cloud threshold\n    // We want sharp clouds\n    // Threshold around (1.0 - cloudDensity)\n    const thresh = 1.0 - cloudDensity;\n    if (cNoise > thresh) {\n        // Cloud opacity\n        const opacity = (cNoise - thresh) / (1.0 - thresh);\n        // Whiten the pixel\n        const cloudCol = 0.95;\n        r = lerp(r, cloudCol, opacity * 0.9);\n        g = lerp(g, cloudCol, opacity * 0.9);\n        b = lerp(b, cloudCol, opacity * 0.9);\n        \n        // Cloud shadow (fake ambient occlusion)\n        // Darken terrain underneath? We are already modifying the pixel.\n        // Real shadows would need to sample 'light direction', too complex for now.\n    }\n\n    return {\n        x, y, z,\n        r, g, b,\n        a: 1.0\n    };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}
