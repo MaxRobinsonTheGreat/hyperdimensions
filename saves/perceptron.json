@@ -1,0 +1,192 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": true,
+    "showSurface": true,
+    "showWireframe": true,
+    "dirIntensity": 1,
+    "shininess": 80,
+    "camera": {
+      "position": {
+        "x": 43.800155102160815,
+        "y": 42.61625069066052,
+        "z": 37.43277966153335
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": -1,
+    "uMax": 1,
+    "vMin": -1,
+    "vMax": 1,
+    "uSegs": 80,
+    "vSegs": 80
+  },
+  "extraParameters": [
+    {
+      "name": "wxu",
+      "value": -3.627,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 7
+    },
+    {
+      "name": "wxv",
+      "value": 1.546,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 11
+    },
+    {
+      "name": "bx",
+      "value": 1.813,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "runtime": 13
+    },
+    {
+      "name": "wyu",
+      "value": 0.088,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 17
+    },
+    {
+      "name": "wyv",
+      "value": 1.883,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 19
+    },
+    {
+      "name": "by",
+      "value": 0.372,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "runtime": 23
+    },
+    {
+      "name": "wzu",
+      "value": 4.846,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 5
+    },
+    {
+      "name": "wzv",
+      "value": -1.006,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 29
+    },
+    {
+      "name": "bz",
+      "value": -0.231,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "runtime": 31
+    },
+    {
+      "name": "wru",
+      "value": 2.738,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 37
+    },
+    {
+      "name": "wrv",
+      "value": 0.751,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 41
+    },
+    {
+      "name": "br",
+      "value": 0.269,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "runtime": 43
+    },
+    {
+      "name": "wgu",
+      "value": -4.446,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 47
+    },
+    {
+      "name": "wgv",
+      "value": -1.004,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 53
+    },
+    {
+      "name": "bg",
+      "value": -0.409,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "runtime": 59
+    },
+    {
+      "name": "wbu",
+      "value": 3.873,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 61
+    },
+    {
+      "name": "wbv",
+      "value": -1.03,
+      "min": -5,
+      "max": 5,
+      "step": 0.001,
+      "runtime": 67
+    },
+    {
+      "name": "bb",
+      "value": 0.118,
+      "min": -3,
+      "max": 3,
+      "step": 0.001,
+      "runtime": 71
+    },
+    {
+      "name": "scale",
+      "value": 8.391,
+      "min": 0.5,
+      "max": 10,
+      "step": 0.001,
+      "runtime": 73
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const S = input.scale;\n    \n    const sig = (x) => 1 / (1 + Math.exp(-x));\n    \n    const x = Math.tanh(input.wxu * u + input.wxv * v + input.bx) * S;\n    const y = Math.tanh(input.wyu * u + input.wyv * v + input.by) * S;\n    const z = Math.tanh(input.wzu * u + input.wzv * v + input.bz) * S;\n    \n    const r = sig(input.wru * u + input.wrv * v + input.br);\n    const g = sig(input.wgu * u + input.wgv * v + input.bg);\n    const b = sig(input.wbu * u + input.wbv * v + input.bb);\n    \n    return { x, y, z, r, g, b, a: 1 };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

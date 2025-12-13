@@ -6,7 +6,19 @@
     "showSurface": true,
     "showWireframe": false,
     "dirIntensity": 1,
-    "shininess": 100
+    "shininess": 100,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
   },
   "parameters": {
     "uMin": 0,

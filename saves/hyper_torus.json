@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": true,
+    "dirIntensity": 1,
+    "shininess": 100,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.28318,
+    "vMin": 0,
+    "vMax": 6.28318,
+    "uSegs": 80,
+    "vSegs": 80
+  },
+  "extraParameters": [
+    {
+      "name": "t",
+      "value": 0,
+      "min": 0,
+      "max": 100,
+      "step": 0.005,
+      "runtime": 50
+    },
+    {
+      "name": "rotationSpeed",
+      "value": 1.0,
+      "min": 0,
+      "max": 5,
+      "step": 0.01
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const t = input.t || 0;\n    const speed = input.rotationSpeed || 1.0;\n    const zoom = 4; // Hardcoded zoom\n    \n    // 1. Define a Clifford Torus in 4D (S3)\n    // This lies on the unit sphere in 4D space\n    const r = 1 / Math.sqrt(2);\n    let x4 = r * Math.cos(u);\n    let y4 = r * Math.sin(u);\n    let z4 = r * Math.cos(v);\n    let w4 = r * Math.sin(v);\n\n    // 2. Rotate in 4D space (Double rotation)\n    // Rotate in XW plane and YZ plane simultaneously\n    const time = t * speed;\n    \n    // Rotation 1 (XW)\n    const x4r = x4 * Math.cos(time) - w4 * Math.sin(time);\n    const w4r = x4 * Math.sin(time) + w4 * Math.cos(time);\n    \n    // Rotation 2 (YZ)\n    const y4r = y4 * Math.cos(time * 0.5) - z4 * Math.sin(time * 0.5);\n    const z4r = y4 * Math.sin(time * 0.5) + z4 * Math.cos(time * 0.5);\n\n    // 3. Stereographic Projection from 4D to 3D\n    // Project from (0,0,0,1) to the 3D hyperplane w=0\n    const denominator = 1.2 - w4r; // Offset to avoid division by zero\n    \n    const x = zoom * x4r / denominator;\n    const y = zoom * y4r / denominator;\n    const z = zoom * z4r / denominator;\n\n    // 4. Color based on the 4th dimension (w) before projection\n    // This visualizes the \"depth\" in the 4th dimension\n    const hue = (w4r + 0.5) * 360;\n    const s = 0.8;\n    const l = 0.5 + 0.2 * Math.sin(u + v);\n\n    // Simple HSV to RGB conversion for convenience\n    const c = (1 - Math.abs(2 * l - 1)) * s;\n    const hp = hue / 60.0;\n    const x_col = c * (1 - Math.abs((hp % 2) - 1));\n    let r_out, g_out, b_out;\n    if (hp >= 0 && hp < 1) { r_out = c; g_out = x_col; b_out = 0; }\n    else if (hp >= 1 && hp < 2) { r_out = x_col; g_out = c; b_out = 0; }\n    else if (hp >= 2 && hp < 3) { r_out = 0; g_out = c; b_out = x_col; }\n    else if (hp >= 3 && hp < 4) { r_out = 0; g_out = x_col; b_out = c; }\n    else if (hp >= 4 && hp < 5) { r_out = x_col; g_out = 0; b_out = c; }\n    else { r_out = c; g_out = 0; b_out = x_col; }\n    const m = l - c / 2;\n\n    return {\n        x, y, z,\n        r: r_out + m,\n        g: g_out + m,\n        b: b_out + m,\n        a: 0.8 // Slightly transparent\n    };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 0.9,
+    "shininess": 50,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.28318,
+    "vMin": 0,
+    "vMax": 6.28318,
+    "uSegs": 150,
+    "vSegs": 150
+  },
+  "extraParameters": [
+    { "name": "x_sin_u", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 5 },
+    { "name": "x_cos_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 7 },
+    { "name": "x_sin_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 11 },
+    { "name": "x_cos_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 13 },
+    { "name": "x_sin_2u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 17 },
+    { "name": "x_cos_2u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 19 },
+    { "name": "x_sin_2v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 23 },
+    { "name": "x_cos_2v", "value": 0.5, "min": -2, "max": 2, "step": 0.001, "runtime": 29 },
+    { "name": "x_sin_3u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 31 },
+    { "name": "x_mix_uv", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 37 },
+    
+    { "name": "y_sin_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 6 },
+    { "name": "y_cos_u", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 8 },
+    { "name": "y_sin_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 12 },
+    { "name": "y_cos_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 14 },
+    { "name": "y_sin_2u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 18 },
+    { "name": "y_cos_2u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 20 },
+    { "name": "y_sin_2v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 24 },
+    { "name": "y_cos_2v", "value": 0.5, "min": -2, "max": 2, "step": 0.001, "runtime": 30 },
+    { "name": "y_sin_3v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 32 },
+    { "name": "y_mix_uv", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 38 },
+    
+    { "name": "z_sin_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 9 },
+    { "name": "z_cos_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 10 },
+    { "name": "z_sin_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 15 },
+    { "name": "z_cos_v", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 16 },
+    { "name": "z_sin_2u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 21 },
+    { "name": "z_cos_2u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 22 },
+    { "name": "z_sin_2v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 25 },
+    { "name": "z_cos_2v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 26 },
+    { "name": "z_sin_3u", "value": 0.2, "min": -2, "max": 2, "step": 0.001, "runtime": 33 },
+    { "name": "z_mix_uv", "value": 0.5, "min": -2, "max": 2, "step": 0.001, "runtime": 39 },
+
+    { "name": "cr_freq_u", "value": 1, "min": 0, "max": 10, "step": 0.01, "runtime": 41 },
+    { "name": "cr_freq_v", "value": 0, "min": 0, "max": 10, "step": 0.01, "runtime": 42 },
+    { "name": "cg_freq_u", "value": 0, "min": 0, "max": 10, "step": 0.01, "runtime": 43 },
+    { "name": "cg_freq_v", "value": 1, "min": 0, "max": 10, "step": 0.01, "runtime": 44 },
+    { "name": "cb_freq_u", "value": 1, "min": 0, "max": 10, "step": 0.01, "runtime": 45 },
+    { "name": "cb_freq_v", "value": 1, "min": 0, "max": 10, "step": 0.01, "runtime": 46 },
+    { "name": "c_phase", "value": 0, "min": 0, "max": 6.28, "step": 0.01, "runtime": 47 }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    \n    // X Terms\n    const x = input.x_sin_u * Math.sin(u) \n            + input.x_cos_u * Math.cos(u)\n            + input.x_sin_v * Math.sin(v)\n            + input.x_cos_v * Math.cos(v)\n            + input.x_sin_2u * Math.sin(2*u)\n            + input.x_cos_2u * Math.cos(2*u)\n            + input.x_sin_2v * Math.sin(2*v)\n            + input.x_cos_2v * Math.cos(2*v)\n            + input.x_sin_3u * Math.sin(3*u)\n            + input.x_mix_uv * Math.sin(u) * Math.cos(v);\n\n    // Y Terms\n    const y = input.y_sin_u * Math.sin(u) \n            + input.y_cos_u * Math.cos(u)\n            + input.y_sin_v * Math.sin(v)\n            + input.y_cos_v * Math.cos(v)\n            + input.y_sin_2u * Math.sin(2*u)\n            + input.y_cos_2u * Math.cos(2*u)\n            + input.y_sin_2v * Math.sin(2*v)\n            + input.y_cos_2v * Math.cos(2*v)\n            + input.y_sin_3v * Math.sin(3*v)\n            + input.y_mix_uv * Math.cos(u) * Math.sin(v);\n\n    // Z Terms\n    const z = input.z_sin_u * Math.sin(u) \n            + input.z_cos_u * Math.cos(u)\n            + input.z_sin_v * Math.sin(v)\n            + input.z_cos_v * Math.cos(v)\n            + input.z_sin_2u * Math.sin(2*u)\n            + input.z_cos_2u * Math.cos(2*u)\n            + input.z_sin_2v * Math.sin(2*v)\n            + input.z_cos_2v * Math.cos(2*v)\n            + input.z_sin_3u * Math.sin(3*u)\n            + input.z_mix_uv * Math.sin(u + v);\n\n    // Color Mapping (RGB Fourier)\n    const p = input.c_phase;\n    \n    const r = 0.5 + 0.5 * Math.sin(input.cr_freq_u * u + input.cr_freq_v * v + p);\n    const g = 0.5 + 0.5 * Math.sin(input.cg_freq_u * u + input.cg_freq_v * v + p + 2.09);\n    const b = 0.5 + 0.5 * Math.sin(input.cb_freq_u * u + input.cb_freq_v * v + p + 4.18);\n\n    return { x, y, z, r, g, b };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

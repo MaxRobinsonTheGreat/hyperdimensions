@@ -131,6 +131,9 @@
                             <div class="control-group-inline">
                                 <button id="pauseAllParams">⏸ Pause All</button>
                             </div>
+                            <div class="control-group-inline">
+                                <button id="randomizeParams">🎲 Randomize</button>
+                            </div>
                         </div>
                         <div class="control-row">
                             <div class="control-group">
@@ -143,10 +146,11 @@
                 <hr class="section-divider">
 
                 <div class="section">
-                    <div class="section-header section-header-static">
+                    <div class="section-header" id="surfaceHeader">
+                        <span class="section-caret" id="surfaceCaret">▼</span>
                         <span class="section-title">Surface function</span>
                     </div>
-                    <div class="section-body">
+                    <div class="section-body" id="surfaceBody">
                         <div class="control-row">
                             <div class="control-group">
                                 <textarea id="surfaceEditor" spellcheck="false"></textarea>
@@ -193,6 +197,7 @@
                     <button id="revertSurface" disabled>Revert</button>
                     <button id="saveConfig">Save</button>
                     <button id="loadConfig">Load</button>
+                    <button id="cancelPanels" class="footer-cancel" style="display: none; grid-column: 1 / -1;">Cancel</button>
                 </div>
                 <div class="sidebar-footer-panel" id="sidebarHeaderPanel" style="display: none;">
                     <div id="savePanel" class="header-panel" style="display: none;">
@@ -386,6 +391,7 @@ function surface(input) {
 
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
         camera.position.set(35, 25, 35);
+        camera.up.set(0, 0, 1); // Z-up orientation
         const initialCameraPosition = camera.position.clone();
         const initialTarget = new THREE.Vector3(0, 0, 0);
 
@@ -602,6 +608,24 @@ function surface(input) {
         const camEndPos = new THREE.Vector3();
         const camEndTarget = new THREE.Vector3();
 
+        // Keyboard state for WASD camera panning
+        const keyState = { w: false, a: false, s: false, d: false, " ": false, x: false, shift: false };
+        window.addEventListener('keydown', (e) => {
+            if (e.target.matches('input, textarea, select')) return;
+            const key = e.key.toLowerCase();
+            if (keyState.hasOwnProperty(key)) {
+                keyState[key] = true;
+                e.preventDefault();
+            }
+        });
+        window.addEventListener('keyup', (e) => {
+            const key = e.key.toLowerCase();
+            if (keyState.hasOwnProperty(key)) {
+                keyState[key] = false;
+                e.preventDefault();
+            }
+        });
+
         // Geometry update scheduling
         let geometryNeedsUpdate = false;
         function scheduleGeometryUpdate() {
@@ -613,11 +637,52 @@ function surface(input) {
             });
         }
 
-        // --- Animation Loop ---
+        let lastFrameTime = performance.now();
         function animate() {
             requestAnimationFrame(animate);
             
             const now = performance.now();
+            const dt = (now - lastFrameTime) / 1000;
+            lastFrameTime = now;
+
+            // Handle WASD camera panning
+            if (keyState.w || keyState.a || keyState.s || keyState.d || keyState[" "] || keyState.x) {
+                // Determine speed based on distance to target
+                const dist = controls.getDistance();
+                let speed = dist * 0.5 * dt;
+
+                if (keyState.shift) {
+                    speed *= 5;
+                }
+
+                // We want to move relative to camera view
+                // 1. Get camera forward vector (3D)
+                const forward = new THREE.Vector3();
+                camera.getWorldDirection(forward);
+                forward.normalize();
+
+                // 2. Get camera right vector (local X) projected on XY to keep strafing level
+                // (Optional: remove .z=0 if you want 3D strafing when rolled, but usually horizontal strafe is preferred)
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+                right.z = 0;
+                right.normalize();
+
+                const move = new THREE.Vector3();
+                if (keyState.w) move.add(forward);
+                if (keyState.s) move.sub(forward);
+                if (keyState.d) move.add(right);
+                if (keyState.a) move.sub(right);
+                
+                // Up/Down movement (Global Z)
+                if (keyState[" "]) move.add(new THREE.Vector3(0, 0, 1));
+                if (keyState.x) move.sub(new THREE.Vector3(0, 0, 1));
+
+                if (move.lengthSq() > 0) {
+                    move.normalize().multiplyScalar(speed);
+                    camera.position.add(move);
+                    controls.target.add(move);
+                }
+            }
 
             // Animate camera tween
             if (isCameraTweening) {
@@ -635,13 +700,19 @@ function surface(input) {
 
             // Animate click marker
             if (clickMarker.visible) {
+                // Scale based on distance to camera to keep roughly constant screen size
+                const dist = camera.position.distanceTo(clickMarker.position);
+                const baseScale = dist * 0.015;
+
                 const mRaw = (now - markerStartTime) / markerDuration;
                 if (mRaw >= 1) {
                     clickMarker.visible = false;
                 } else {
                     const inv = 1 - mRaw;
                     clickMarkerMat.opacity = inv;
-                    const scale = 1 + 0.5 * mRaw;
+                    // Pulse animation on top of distance scaling
+                    const pulse = 1 + 0.5 * mRaw;
+                    const scale = baseScale * pulse;
                     clickMarker.scale.set(scale, scale, scale);
                 }
             }
@@ -776,6 +847,7 @@ function surface(input) {
             const globalParamControls = document.getElementById('globalParamControls');
             const playAllBtn = document.getElementById('playAllParams');
             const pauseAllBtn = document.getElementById('pauseAllParams');
+            const randomizeBtn = document.getElementById('randomizeParams');
 
             function updateGlobalControlsVisibility() {
                 if (globalParamControls) {
@@ -817,6 +889,45 @@ function surface(input) {
                         state.playButton.textContent = '▶';
                         state.lastTime = performance.now(); // Not strictly needed for pause, but good hygiene
                     }
+                });
+                scheduleGeometryUpdate();
+            });
+
+            randomizeBtn.addEventListener('click', () => {
+                const now = performance.now();
+                animatedParams.forEach(state => {
+                    let minVal = parseNum(state.minInput, -1);
+                    let maxVal = parseNum(state.maxInput, 1);
+                    const step = parseNum(state.stepInput, 0.001);
+
+                    if (maxVal <= minVal) {
+                        maxVal = minVal + 1;
+                    }
+                    const range = maxVal - minVal;
+                    
+                    // Generate random value within range
+                    let rawVal = minVal + Math.random() * range;
+
+                    // Snap to step
+                    if (step > 0) {
+                        const steps = Math.round((rawVal - minVal) / step);
+                        rawVal = minVal + steps * step;
+                    }
+
+                    // Clamp
+                    rawVal = Math.min(Math.max(rawVal, minVal), maxVal);
+
+                    // Update UI
+                    state.valueInput.value = formatScalar(rawVal);
+                    state.sliderInput.value = String(rawVal);
+
+                    // Update phase so animation continues smoothly from this new value (on rising edge)
+                    if (range > 0) {
+                        const tUp = (rawVal - minVal) / range;
+                        const clampedUp = Math.min(Math.max(tUp, 0), 1);
+                        state.phase = 0.5 * clampedUp;
+                    }
+                    state.lastTime = now;
                 });
                 scheduleGeometryUpdate();
             });
@@ -909,6 +1020,16 @@ function surface(input) {
                 outputsCaret.textContent = isHidden ? '▼' : '▶';
             });
 
+            const surfaceHeader = document.getElementById('surfaceHeader');
+            const surfaceBody = document.getElementById('surfaceBody');
+            const surfaceCaret = document.getElementById('surfaceCaret');
+
+            surfaceHeader.addEventListener('click', () => {
+                const isHidden = surfaceBody.style.display === 'none';
+                surfaceBody.style.display = isHidden ? '' : 'none';
+                surfaceCaret.textContent = isHidden ? '▼' : '▶';
+            });
+
             const coordSelect = document.getElementById('coordConversion');
             const rgbToHsvCheckbox = document.getElementById('rgbToHsv');
 
@@ -924,6 +1045,7 @@ function surface(input) {
 
             const saveBtn = document.getElementById('saveConfig');
             const loadBtn = document.getElementById('loadConfig');
+            const cancelPanelsBtn = document.getElementById('cancelPanels');
             const headerPanel = document.getElementById('sidebarHeaderPanel');
             const savePanel = document.getElementById('savePanel');
             const loadPanel = document.getElementById('loadPanel');
@@ -932,10 +1054,18 @@ function surface(input) {
             const loadPresetSelect = document.getElementById('loadPreset');
             const loadPresetBtn = document.getElementById('loadPresetBtn');
 
+            function setFooterCancelVisible(visible) {
+                if (!saveBtn || !loadBtn || !cancelPanelsBtn) return;
+                saveBtn.style.display = visible ? 'none' : '';
+                loadBtn.style.display = visible ? 'none' : '';
+                cancelPanelsBtn.style.display = visible ? '' : 'none';
+            }
+
             function hideHeaderPanels() {
                 headerPanel.style.display = 'none';
                 savePanel.style.display = 'none';
                 loadPanel.style.display = 'none';
+                setFooterCancelVisible(false);
             }
 
             saveBtn.addEventListener('click', () => {
@@ -947,26 +1077,11 @@ function surface(input) {
                 headerPanel.style.display = '';
                 savePanel.style.display = '';
                 loadPanel.style.display = 'none';
+                setFooterCancelVisible(true);
             });
 
-            loadBtn.addEventListener('click', () => {
-                const loadVisible = headerPanel.style.display !== 'none' && loadPanel.style.display !== 'none';
-                if (loadVisible) {
-                    hideHeaderPanels();
-                    return;
-                }
-                headerPanel.style.display = '';
-                loadPanel.style.display = '';
-                savePanel.style.display = 'none';
-            });
-
-            uploadSaveBtn.addEventListener('click', () => {
-                if (uploadSaveInput) {
-                    uploadSaveInput.click();
-                }
-            });
-
-            if (loadPresetSelect) {
+            function reloadSaveList() {
+                if (!loadPresetSelect) return;
                 fetch('saves/_list.json')
                     .then((res) => {
                         if (!res.ok) throw new Error('Failed to load save list');
@@ -996,6 +1111,33 @@ function surface(input) {
                         console.error(err);
                     });
             }
+
+            loadBtn.addEventListener('click', () => {
+                const loadVisible = headerPanel.style.display !== 'none' && loadPanel.style.display !== 'none';
+                if (loadVisible) {
+                    hideHeaderPanels();
+                    return;
+                }
+                headerPanel.style.display = '';
+                loadPanel.style.display = '';
+                savePanel.style.display = 'none';
+                setFooterCancelVisible(true);
+                reloadSaveList();
+            });
+
+            if (cancelPanelsBtn) {
+                cancelPanelsBtn.addEventListener('click', () => {
+                    hideHeaderPanels();
+                });
+            }
+
+            uploadSaveBtn.addEventListener('click', () => {
+                if (uploadSaveInput) {
+                    uploadSaveInput.click();
+                }
+            });
+
+            reloadSaveList();
 
             if (loadPresetBtn && loadPresetSelect) {
                 loadPresetBtn.addEventListener('click', () => {
@@ -1478,6 +1620,28 @@ function surface(input) {
                     mesh.material.forEach(m => { if (m && 'shininess' in m) m.shininess = shininessVal; });
                 }
 
+                if (display.camera) {
+                    const pos = display.camera.position;
+                    const tgt = display.camera.target;
+                    if (pos && typeof pos.x === 'number') {
+                        camera.position.set(pos.x, pos.y, pos.z);
+                    } else {
+                        // Default if missing
+                        camera.position.copy(initialCameraPosition);
+                    }
+                    if (tgt && typeof tgt.x === 'number') {
+                        controls.target.set(tgt.x, tgt.y, tgt.z);
+                    } else {
+                        controls.target.copy(initialTarget);
+                    }
+                    controls.update();
+                } else {
+                    // Reset to default if no camera info in save
+                    camera.position.copy(initialCameraPosition);
+                    controls.target.copy(initialTarget);
+                    controls.update();
+                }
+
                 const parameters = cfg.parameters || {};
                 params.uMin = toNum(parameters.uMin, 0);
                 params.uMax = toNum(parameters.uMax, 1);
@@ -1569,7 +1733,11 @@ function surface(input) {
                     showSurface: !!surfaceToggle.checked,
                     showWireframe: !!wireToggle.checked,
                     dirIntensity: parseFloat(dirIntensity.value) || 0,
-                    shininess: getCurrentShininess()
+                    shininess: getCurrentShininess(),
+                    camera: {
+                        position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+                        target: { x: controls.target.x, y: controls.target.y, z: controls.target.z }
+                    }
                 };
 
                 const parameters = {

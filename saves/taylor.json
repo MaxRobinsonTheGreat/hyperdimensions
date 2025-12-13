@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 0.9,
+    "shininess": 60,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": -1.5,
+    "uMax": 1.5,
+    "vMin": -1.5,
+    "vMax": 1.5,
+    "uSegs": 100,
+    "vSegs": 100
+  },
+  "extraParameters": [
+    { "name": "x_u", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 3 },
+    { "name": "x_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 5 },
+    { "name": "x_u2", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 7 },
+    { "name": "x_v2", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 11 },
+    { "name": "x_uv", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 13 },
+    { "name": "x_u3", "value": -0.5, "min": -2, "max": 2, "step": 0.001, "runtime": 17 },
+    { "name": "x_v3", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 19 },
+    
+    { "name": "y_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 4 },
+    { "name": "y_v", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 6 },
+    { "name": "y_u2", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 8 },
+    { "name": "y_v2", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 12 },
+    { "name": "y_uv", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 14 },
+    { "name": "y_u3", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 18 },
+    { "name": "y_v3", "value": -0.5, "min": -2, "max": 2, "step": 0.001, "runtime": 20 },
+    
+    { "name": "z_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 23 },
+    { "name": "z_v", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 29 },
+    { "name": "z_u2", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 31 },
+    { "name": "z_v2", "value": -1, "min": -2, "max": 2, "step": 0.001, "runtime": 37 },
+    { "name": "z_uv", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 41 },
+    { "name": "z_u3", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 43 },
+    { "name": "z_v3", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 47 },
+
+    { "name": "r_u2", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 53 },
+    { "name": "r_v2", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 59 },
+    { "name": "g_u", "value": 0, "min": -2, "max": 2, "step": 0.001, "runtime": 61 },
+    { "name": "g_v", "value": 1, "min": -2, "max": 2, "step": 0.001, "runtime": 67 },
+    { "name": "b_const", "value": 0.5, "min": 0, "max": 1, "step": 0.001, "runtime": 71 },
+    { "name": "b_uv", "value": 0.5, "min": -2, "max": 2, "step": 0.001, "runtime": 73 }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    \n    // Powers\n    const u2 = u*u; const v2 = v*v;\n    const u3 = u2*u; const v3 = v2*v;\n    const uv = u*v;\n    \n    // Taylor Series Expansion (Polynomial Surface)\n    // X = c1*u + c2*v + c3*u^2 + ...\n    const x = input.x_u * u + input.x_v * v \n            + input.x_u2 * u2 + input.x_v2 * v2 + input.x_uv * uv\n            + input.x_u3 * u3 + input.x_v3 * v3;\n            \n    const y = input.y_u * u + input.y_v * v \n            + input.y_u2 * u2 + input.y_v2 * v2 + input.y_uv * uv\n            + input.y_u3 * u3 + input.y_v3 * v3;\n            \n    const z = input.z_u * u + input.z_v * v \n            + input.z_u2 * u2 + input.z_v2 * v2 + input.z_uv * uv\n            + input.z_u3 * u3 + input.z_v3 * v3;\n\n    // Polynomial Color\n    // We clamp values to 0..1 to keep them valid colors\n    const clamp = (val) => Math.max(0, Math.min(1, val));\n    \n    const r = clamp(0.5 + 0.2 * (input.r_u2 * u2 + input.r_v2 * v2));\n    const g = clamp(0.5 + 0.3 * (input.g_u * u + input.g_v * v));\n    const b = clamp(input.b_const + 0.3 * (input.b_uv * uv));\n\n    return { x, y, z, r, g, b, a: 1 };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

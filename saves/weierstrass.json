@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": true,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 0.8,
+    "shininess": 20,
+    "camera": {
+      "position": {
+        "x": 1.1663998431691218,
+        "y": -44.8884263667442,
+        "z": 22.09695473244893
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 3.14159,
+    "vMin": 0,
+    "vMax": 6.28318,
+    "uSegs": 200,
+    "vSegs": 200
+  },
+  "extraParameters": [
+    {
+      "name": "a",
+      "value": 0.3342,
+      "min": 0,
+      "max": 0.5,
+      "step": 0.0001,
+      "runtime": 17
+    },
+    {
+      "name": "b",
+      "value": 7,
+      "min": 1,
+      "max": 7,
+      "step": 0.01,
+      "runtime": 19
+    },
+    {
+      "name": "Iterations",
+      "value": 6,
+      "min": 1,
+      "max": 10,
+      "step": 1,
+      "runtime": 11
+    },
+    {
+      "name": "Amplitude",
+      "value": 4.5,
+      "min": 0,
+      "max": 5,
+      "step": 0.01,
+      "runtime": 13
+    },
+    {
+      "name": "Radius",
+      "value": 6.96,
+      "min": 0.1,
+      "max": 10,
+      "step": 0.01,
+      "runtime": 21
+    },
+    {
+      "name": "Time",
+      "value": 24.43,
+      "min": 0,
+      "max": 100,
+      "step": 0.01,
+      "runtime": 100
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u; // Theta (0 to PI)\n    const v = input.v; // Phi (0 to 2PI)\n    \n    const a = input.a;       // Decay factor (0 < a < 1)\n    const b = input.b;       // Frequency growth (b > 1)\n    const iters = input.Iterations;\n    const amp = input.Amplitude;\n    const R = input.Radius;\n    const t = input.Time;\n\n    let displacement = 0;\n    \n    // Weierstrass Function summation\n    // W(x) = sum( a^n * cos(b^n * pi * x) )\n    // Extended to 2D surface (sphere topology)\n    for(let n=0; n<iters; n++) {\n        const coeff = Math.pow(a, n);\n        const freq = Math.pow(b, n);\n        \n        // Create a time-varying phase for animation\n        const phase = t * (n + 1) * 0.5;\n        \n        // Combine u and v in a way that wraps somewhat continuously\n        // We mix u and v to create a 3D noise texture\n        const val = Math.cos(freq * u + phase) * Math.sin(freq * v + phase);\n        \n        displacement += coeff * val;\n    }\n    \n    // Apply displacement to radius\n    const r = R + displacement * amp;\n    \n    // Spherical to Cartesian\n    const x = r * Math.sin(u) * Math.cos(v);\n    const y = r * Math.sin(u) * Math.sin(v);\n    const z = r * Math.cos(u);\n    \n    // Coloring based on displacement (height map)\n    // Map displacement range roughly -2..2 to 0..1\n    const norm = (displacement * amp + 2) / 4;\n    \n    // Electric palette\n    const red = Math.pow(Math.sin(norm * 3), 2);\n    const green = Math.pow(Math.cos(norm * 5), 2) * 0.8;\n    const blue = Math.pow(Math.sin(norm * 2 + 1), 2) + 0.2;\n    \n    return { \n        x, y, z, \n        r: red, \n        g: green, \n        b: blue, \n        a: 1 \n    };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

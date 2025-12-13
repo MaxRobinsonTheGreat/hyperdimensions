@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1,
+    "shininess": 100,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.283185307179586,
+    "vMin": -1,
+    "vMax": 1,
+    "uSegs": 150,
+    "vSegs": 30
+  },
+  "extraParameters": [
+    {
+      "name": "radius",
+      "value": 4,
+      "min": 1,
+      "max": 10,
+      "step": 0.001,
+      "runtime": 8
+    },
+    {
+      "name": "width",
+      "value": 1.5,
+      "min": 0.1,
+      "max": 4,
+      "step": 0.001,
+      "runtime": 8
+    },
+    {
+      "name": "twists",
+      "value": 1,
+      "min": 0,
+      "max": 5,
+      "step": 1,
+      "runtime": 12
+    },
+    {
+      "name": "turn",
+      "value": 0,
+      "min": 0,
+      "max": 2,
+      "step": 0.001,
+      "runtime": 8
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const radius = input.radius || 4;\n    const width = input.width || 1.5;\n    const twists = Math.round(input.twists !== undefined ? input.twists : 1);\n    const turn = input.turn !== undefined ? input.turn : 0;\n    \n    const twistAngle = twists * u / 2 + Math.PI * turn;\n    const cosTwist = Math.cos(twistAngle);\n    const sinTwist = Math.sin(twistAngle);\n    const uPos = twists !== 0 ? (u - (2 * Math.PI * turn) / twists) : u;\n    const cosU = Math.cos(uPos);\n    const sinU = Math.sin(uPos);\n    \n    const r_local = radius + (v * width / 2) * cosTwist;\n    \n    const x = r_local * cosU;\n    const y = r_local * sinU;\n    const z = (v * width / 2) * sinTwist;\n    \n    const r = 0.6 + 0.3 * cosU;\n    const g = 0.7 + 0.2 * sinU;\n    const b = 0.85;\n    \n    return { x, y, z, r, g, b, a: 1 };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

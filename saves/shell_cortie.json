@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": false,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1,
+    "shininess": 100,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 1,
+    "vMin": 0,
+    "vMax": 1,
+    "uSegs": 200,
+    "vSegs": 80
+  },
+  "extraParameters": [
+    { "name": "alpha", "value": 85, "min": 80, "max": 89.5, "step": 0.1, "runtime": 4.7 },
+    { "name": "beta", "value": 40, "min": 0, "max": 90, "step": 1, "runtime": 5.3 },
+    { "name": "phi", "value": 55, "min": -90, "max": 90, "step": 1, "runtime": 6.1 },
+    { "name": "omega", "value": 10, "min": -45, "max": 45, "step": 1, "runtime": 3.7 },
+    { "name": "mu", "value": 30, "min": -45, "max": 45, "step": 1, "runtime": 4.3 },
+    { "name": "sMin", "value": -200, "min": -270, "max": -90, "step": 1, "runtime": 7.1 },
+    { "name": "sMax", "value": 60, "min": 30, "max": 120, "step": 1, "runtime": 7.9 },
+    { "name": "A", "value": 0.25, "min": 0.05, "max": 0.5, "step": 0.01, "runtime": 3.1 },
+    { "name": "a", "value": 0.15, "min": 0.02, "max": 0.3, "step": 0.01, "runtime": 5.9 },
+    { "name": "b", "value": 0.2, "min": 0.02, "max": 0.3, "step": 0.01, "runtime": 8.3 },
+    { "name": "D", "value": 1, "min": -1, "max": 1, "step": 2, "runtime": 20 },
+    { "name": "L", "value": 0, "min": 0, "max": 0.15, "step": 0.005, "runtime": 2.3 },
+    { "name": "N", "value": 8, "min": 3, "max": 20, "step": 1, "runtime": 15 },
+    { "name": "W1", "value": 30, "min": 10, "max": 180, "step": 1, "runtime": 9.7 },
+    { "name": "W2", "value": 30, "min": 10, "max": 180, "step": 1, "runtime": 11.3 },
+    { "name": "P", "value": 0, "min": -90, "max": 90, "step": 1, "runtime": 12.7 },
+    { "name": "turns", "value": 5, "min": 2, "max": 8, "step": 0.25, "runtime": 13.1 },
+    { "name": "hueBase", "value": 0.08, "min": 0, "max": 1, "step": 0.01, "runtime": 1.7 },
+    { "name": "hueSpread", "value": 0.1, "min": 0, "max": 0.5, "step": 0.01, "runtime": 1.3 },
+    { "name": "saturation", "value": 0.35, "min": 0, "max": 1, "step": 0.01, "runtime": 2.9 },
+    { "name": "brightness", "value": 0.75, "min": 0.3, "max": 1, "step": 0.01, "runtime": 3.3 },
+    { "name": "stripes", "value": 12, "min": 0, "max": 40, "step": 1, "runtime": 17 },
+    { "name": "stripeInt", "value": 0.3, "min": 0, "max": 1, "step": 0.01, "runtime": 2.1 }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u, v = input.v;\n    const deg = Math.PI / 180;\n    \n    const alpha = input.alpha * deg;\n    const beta = input.beta * deg;\n    const phi = input.phi * deg;\n    const omega = input.omega * deg;\n    const mu = input.mu * deg;\n    const sMinDeg = input.sMin, sMaxDeg = input.sMax;\n    const A = input.A, a = input.a, b = input.b;\n    const D = input.D >= 0 ? 1 : -1;\n    const L = input.L, N = input.N, W1 = input.W1, W2 = input.W2, P = input.P * deg;\n    const turns = input.turns;\n    \n    const theta = u * turns * 2 * Math.PI;\n    const sDeg = sMinDeg + v * (sMaxDeg - sMinDeg);\n    const s = sDeg * deg;\n    \n    const cosS = Math.cos(s), sinS = Math.sin(s);\n    const Re = 1 / Math.sqrt((cosS*cosS)/(a*a) + (sinS*sinS)/(b*b));\n    \n    const thetaDeg = theta / deg;\n    const fTheta = (360/N) * ((thetaDeg * N / 360) - Math.floor(thetaDeg * N / 360));\n    const k = L * Math.exp(-Math.pow(2*(s - P)/(W1*deg), 2)) * Math.exp(-Math.pow(2*fTheta/W2, 2));\n    const R = Re + k;\n    \n    const cotAlpha = 1 / Math.tan(alpha);\n    const growth = Math.exp(theta * cotAlpha);\n    \n    const sPhi = s + phi;\n    const cosSPhi = Math.cos(sPhi), sinSPhi = Math.sin(sPhi);\n    const cosTheta = Math.cos(theta), sinTheta = Math.sin(theta);\n    const cosThetaOmega = Math.cos(theta + omega), sinThetaOmega = Math.sin(theta + omega);\n    const sinBeta = Math.sin(beta), cosBeta = Math.cos(beta);\n    const sinMu = Math.sin(mu), cosMu = Math.cos(mu);\n    \n    const x = D * (A * sinBeta * cosTheta + R * cosSPhi * cosThetaOmega - R * sinMu * sinSPhi * sinTheta) * growth;\n    const y = (-A * sinBeta * sinTheta - R * cosSPhi * sinThetaOmega - R * sinMu * sinSPhi * cosTheta) * growth;\n    const z = (-A * cosBeta + R * sinSPhi * cosMu) * growth;\n    \n    const stripeVal = input.stripes > 0 ? Math.pow(Math.sin(theta * input.stripes), 2) * input.stripeInt : 0;\n    const noduleVal = L > 0 ? (k / L) * 0.2 : 0;\n    \n    const hue = (input.hueBase + (theta / (turns * 2 * Math.PI)) * input.hueSpread + stripeVal * 0.1) % 1;\n    const sat = Math.min(1, input.saturation + stripeVal * 0.2);\n    const val = Math.min(1, input.brightness + noduleVal - stripeVal * 0.15);\n    \n    const h = hue * 6, i = Math.floor(h), f = h - i;\n    const p = val * (1 - sat), q = val * (1 - sat * f), t = val * (1 - sat * (1 - f));\n    let r, g, bl;\n    switch (i % 6) {\n        case 0: r = val; g = t; bl = p; break;\n        case 1: r = q; g = val; bl = p; break;\n        case 2: r = p; g = val; bl = t; break;\n        case 3: r = p; g = q; bl = val; break;\n        case 4: r = t; g = p; bl = val; break;\n        case 5: r = val; g = p; bl = q; break;\n    }\n    \n    return { x, y, z, r, g, b: bl, a: 1 };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

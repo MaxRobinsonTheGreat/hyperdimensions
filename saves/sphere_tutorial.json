@@ -6,7 +6,19 @@
     "showSurface": true,
     "showWireframe": false,
     "dirIntensity": 1,
-    "shininess": 100
+    "shininess": 100,
+    "camera": {
+      "position": {
+        "x": 34.99999999999268,
+        "y": 24.999999999991296,
+        "z": 34.99999999990706
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
   },
   "parameters": {
     "uMin": 0,
@@ -27,7 +39,7 @@
     }
   ],
   "surface": {
-    "code": "// the function \"surface\" defines a colored parametric surface, this one is a sphere\n// the function takes an input object, which always has a \"u\" and \"v\" value\n// input may also have arbitrary parameters, like t, that are defined in the UI above\n\n// the function returns an object with values {x,y,z,r,g,b,a}\n// xyz defines coordinates, rgb defines color, a defines transparency\n// rgba values are clipped between 0-1\n// all values default to 1 if not explicitly returned\n\n// both the \"Math\" and \"math\" libraries are available, \n// allowing complex mathematical operations\n\nfunction surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const radius = input.radius;\n    \n    const x = Math.cos(u)*Math.sin(v)*radius;\n    const y = Math.cos(u)*Math.cos(v)*radius;\n    const z = Math.sin(u)*radius;\n \n    const r = x/radius; // normalize colors to radius\n    const g = y/radius;\n    const b = z/radius;\n    const a = 1.0;\n     \n    return { x, y, z, r, g, b, a };\n }"
+    "code": "// the function \"surface\" defines a colored parametric surface, this one is a sphere\n// the function takes an input object, which always has a \"u\" and \"v\" value\n// input may also have arbitrary parameters, like t, that are defined in the UI above\n\n// the function returns an object with values {x,y,z,r,g,b,a}\n// xyz defines coordinates, rgb defines color, a defines transparency\n// z is up\n// rgba values are clipped between 0-1\n// all values default to 1 if not explicitly returned\n\n// both the \"Math\" and \"math\" libraries are available, \n// allowing complex mathematical operations\n\nfunction surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const radius = input.radius;\n    \n    const x = Math.cos(u)*Math.sin(v)*radius;\n    const y = Math.cos(u)*Math.cos(v)*radius;\n    const z = Math.sin(u)*radius;\n \n    const r = x/radius; // normalize colors to radius\n    const g = y/radius;\n    const b = z/radius;\n    const a = 1.0;\n     \n    return { x, y, z, r, g, b, a };\n }"
   },
   "outputs": {
     "coordConversion": "none",

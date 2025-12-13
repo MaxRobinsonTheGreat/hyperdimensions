@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": true,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 0.8,
+    "shininess": 30,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 3.14159,
+    "vMin": 0,
+    "vMax": 6.28318,
+    "uSegs": 150,
+    "vSegs": 150
+  },
+  "extraParameters": [
+    {
+      "name": "Power",
+      "value": 8,
+      "min": 2,
+      "max": 16,
+      "step": 0.001,
+      "runtime": 1
+    },
+    {
+      "name": "Iterations",
+      "value": 12,
+      "min": 1,
+      "max": 30,
+      "step": 1,
+      "runtime": 2
+    },
+    {
+      "name": "Bailout",
+      "value": 4,
+      "min": 1,
+      "max": 20,
+      "step": 0.01,
+      "runtime": 3
+    },
+    {
+      "name": "Detail",
+      "value": 200,
+      "min": 10,
+      "max": 1000,
+      "step": 10,
+      "runtime": 4
+    },
+    {
+      "name": "Cx",
+      "value": 0.6,
+      "min": -2,
+      "max": 2,
+      "step": 0.01,
+      "runtime": 5
+    },
+    {
+      "name": "Cy",
+      "value": 0.4,
+      "min": -2,
+      "max": 2,
+      "step": 0.01,
+      "runtime": 6
+    },
+    {
+      "name": "Cz",
+      "value": 0.2,
+      "min": -2,
+      "max": 2,
+      "step": 0.01,
+      "runtime": 7
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u; // Theta\n    const v = input.v; // Phi\n    \n    // Optimized access to params\n    const power = input.Power;\n    const maxIter = input.Iterations;\n    const bailout = input.Bailout;\n    const bailoutSq = bailout * bailout;\n    const detail = input.Detail;\n    \n    // Dynamic epsilon based on detail\n    const epsilon = 1.0 / (detail * 10);\n    const maxRaySteps = 100;\n    \n    const cx = input.Cx;\n    const cy = input.Cy;\n    const cz = input.Cz;\n    \n    const sinU = Math.sin(u);\n    const dx = sinU * Math.cos(v);\n    const dy = sinU * Math.sin(v);\n    const dz = Math.cos(u);\n    \n    let r = 2.0;\n    let hit = false;\n    \n    // Inlined GetDist for performance (avoids function call overhead in tight loop)\n    // Improved Derivative Logic to reduce spikes\n    function getDist(x, y, z) {\n        let zx = x, zy = y, zz = z;\n        let dr = 1.0;\n        let r2 = zx*zx + zy*zy + zz*zz;\n        \n        for (let i = 0; i < maxIter; i++) {\n            if (r2 > bailoutSq) break;\n            \n            // Optimize: use raw math, minimize object creation\n            let rad = Math.sqrt(r2);\n            // Safe acos for theta (clamp to -1..1)\n            let theta = Math.acos(Math.max(-1, Math.min(1, zz / rad)));\n            let phi = Math.atan2(zy, zx);\n            \n            let zr = Math.pow(rad, power);\n            let thetaP = theta * power;\n            let phiP = phi * power;\n            \n            // Julia Derivative: dr = power * r^(power-1) * dr\n            // We can optimize pow calls\n            dr = Math.pow(rad, power - 1) * power * dr + 1.0;\n            \n            const sinThetaP = Math.sin(thetaP);\n            zx = zr * sinThetaP * Math.cos(phiP);\n            zy = zr * sinThetaP * Math.sin(phiP);\n            zz = zr * Math.cos(thetaP);\n            \n            zx += cx;\n            zy += cy;\n            zz += cz;\n            \n            r2 = zx*zx + zy*zy + zz*zz;\n        }\n        \n        const rad = Math.sqrt(r2);\n        // Soften the DE to reduce sharp spikes (over-stepping)\n        // Multiplying by 0.5 * log(r) * r / dr is standard, but we cap dr to avoid infinite spikes\n        if (dr < 1.0) dr = 1.0;\n        return 0.5 * Math.log(rad) * rad / dr;\n    }\n\n    for(let i=0; i<maxRaySteps; i++) {\n        const px = dx * r;\n        const py = dy * r;\n        const pz = dz * r;\n        \n        let d = getDist(px, py, pz);\n        \n        // Spike Fix: Clamp maximum step size to prevent overshooting into the shape\n        // especially when near complex details\n        if (d > 0.2) d = 0.2;\n\n        if (d < epsilon) {\n            hit = true;\n            r -= d * 0.5;\n            break;\n        }\n        \n        r -= d;\n        if (r < 0) { r = 0; break; }\n    }\n    \n    const finalX = dx * r;\n    const finalY = dy * r;\n    const finalZ = dz * r;\n    \n    // Coloring (Compute Trap)\n    let trap = 1e20;\n    let iters = 0;\n    \n    if (hit) {\n        let zx = finalX, zy = finalY, zz = finalZ;\n        let r2 = 0;\n        for (let i = 0; i < maxIter; i++) {\n            r2 = zx*zx + zy*zy + zz*zz;\n            if (r2 > bailoutSq) break;\n            \n            trap = Math.min(trap, r2);\n            \n            let rad = Math.sqrt(r2);\n            let theta = Math.acos(Math.max(-1, Math.min(1, zz / rad)));\n            let phi = Math.atan2(zy, zx);\n            \n            let zr = Math.pow(rad, power);\n            let thetaP = theta * power;\n            let phiP = phi * power;\n            \n            const sinThetaP = Math.sin(thetaP);\n            zx = zr * sinThetaP * Math.cos(phiP);\n            zy = zr * sinThetaP * Math.sin(phiP);\n            zz = zr * Math.cos(thetaP);\n            \n            zx += cx;\n            zy += cy;\n            zz += cz;\n            iters = i;\n        }\n    }\n\n    let red, green, blue;\n    if (hit) {\n        const t = Math.sqrt(trap);\n        const col = t * 0.8 + (iters / maxIter) * 0.2;\n        red = 0.5 + 0.5 * Math.cos(col * 4 + 0.5);\n        green = 0.5 + 0.5 * Math.cos(col * 4 + 1.5);\n        blue = 0.5 + 0.5 * Math.cos(col * 4 + 2.5);\n    } else {\n        red = 0; green = 0; blue = 0;\n    }\n    \n    const alpha = hit ? 1.0 : 0.0;\n    \n    return { x: finalX, y: finalY, z: finalZ, r: red, g: green, b: blue, a: alpha };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

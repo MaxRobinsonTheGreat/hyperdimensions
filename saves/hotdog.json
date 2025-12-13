@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": true,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1,
+    "shininess": 60,
+    "camera": {
+      "position": {
+        "x": 2.6061530215505133,
+        "y": -26.706901577064528,
+        "z": 3.3566421822176444
+      },
+      "target": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.28,
+    "vMin": 0,
+    "vMax": 1,
+    "uSegs": 120,
+    "vSegs": 100
+  },
+  "extraParameters": [
+    {
+      "name": "radius",
+      "value": 1,
+      "min": 0.5,
+      "max": 2,
+      "step": 0.01,
+      "runtime": 8
+    },
+    {
+      "name": "length",
+      "value": 7,
+      "min": 4,
+      "max": 12,
+      "step": 0.1,
+      "runtime": 8
+    }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const R = input.radius;\n    const L = input.length;\n    const halfL = L / 2;\n    const sausageLen = L * 1.15;\n    const halfSausage = sausageLen / 2;\n    \n    let x, y, z, r, g, b;\n    \n    if (v < 0.45) {\n        // BUN - wraps around bottom, opening faces up (+Z)\n        const t = v / 0.45;\n        const bunR = R * 1.5;\n        const angle = Math.PI * 0.25 + t * Math.PI * 1.5;\n        \n        const uNorm = u / (2 * Math.PI);\n        const xBase = -halfL + uNorm * L;\n        \n        const endMargin = bunR * 0.6;\n        let endScale = 1;\n        if (xBase < -halfL + endMargin) {\n            const d = (-halfL + endMargin - xBase) / endMargin;\n            endScale = Math.sqrt(Math.max(0, 1 - d*d));\n        } else if (xBase > halfL - endMargin) {\n            const d = (xBase - (halfL - endMargin)) / endMargin;\n            endScale = Math.sqrt(Math.max(0, 1 - d*d));\n        }\n        \n        x = xBase;\n        y = bunR * Math.sin(angle) * endScale;\n        z = bunR * Math.cos(angle) * endScale + R * 0.1;\n        \n        r = 0.94; g = 0.74; b = 0.44;\n        \n    } else if (v < 0.88) {\n        // SAUSAGE - longer capsule, sticks out of bun\n        const t = (v - 0.45) / 0.43;\n        const capSize = 0.1;\n        let xPos, rScale;\n        \n        if (t < capSize) {\n            const ct = t / capSize;\n            const phi = (ct - 1) * Math.PI / 2;\n            rScale = Math.cos(phi);\n            xPos = -halfSausage + R + R * Math.sin(phi);\n        } else if (t > 1 - capSize) {\n            const ct = (t - (1 - capSize)) / capSize;\n            const phi = ct * Math.PI / 2;\n            rScale = Math.cos(phi);\n            xPos = halfSausage - R + R * Math.sin(phi);\n        } else {\n            const mt = (t - capSize) / (1 - 2*capSize);\n            rScale = 1;\n            xPos = -halfSausage + R + mt * (sausageLen - 2*R);\n        }\n        \n        x = xPos;\n        y = R * rScale * Math.sin(u);\n        z = R * rScale * Math.cos(u);\n        \n        const grill = Math.sin(u * 5) > 0.55 ? 0.2 : 0;\n        r = 0.82 - grill;\n        g = 0.32 - grill;\n        b = 0.16 - grill * 0.4;\n        \n    } else {\n        // KETCHUP - on top of sausage (+Z direction)\n        const t = (v - 0.88) / 0.12;\n        const kR = R * 0.08;\n        const uNorm = u / (2 * Math.PI);\n        \n        const xPos = -halfL * 0.5 + uNorm * L * 0.5;\n        const wave = Math.sin(uNorm * 20) * R * 0.2;\n        const angle = t * 2 * Math.PI;\n        \n        x = xPos;\n        y = wave + kR * Math.sin(angle);\n        z = R + kR * (1 + Math.cos(angle));\n        \n        r = 0.92; g = 0.1; b = 0.08;\n    }\n    \n    return { x, y, z, r, g, b, a: 1 };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}
