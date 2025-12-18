@@ -695,6 +695,8 @@ function surface(input) {
                     let minVal = parseFloat(state.minInput.value);
                     let maxVal = parseFloat(state.maxInput.value);
                     if (!Number.isFinite(runtime) || runtime <= 0) {
+                        state.playing = false;
+                        state.playButton.textContent = '▶';
                         state.lastTime = now;
                         return;
                     }
@@ -1654,7 +1656,8 @@ function surface(input) {
                     const minVal = toNum(item.min, val - 1);
                     const maxVal = toNum(item.max, val + 1);
                     const stepVal = toNum(item.step, 0.001);
-                    const runtimeVal = toNum(item.runtime, 8);
+                    let runtimeVal = toNum(item.runtime, 8);
+                    if (runtimeVal <= 0) runtimeVal = 8;
 
                     state.valueInput.value = formatScalar(val);
                     state.minInput.value = formatScalar(minVal);

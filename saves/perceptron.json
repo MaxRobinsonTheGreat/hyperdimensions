@@ -183,7 +183,7 @@
     }
   ],
   "surface": {
-    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const S = input.scale;\n    \n    const sig = (x) => 1 / (1 + Math.exp(-x));\n    \n    const x = Math.tanh(input.wxu * u + input.wxv * v + input.bx) * S;\n    const y = Math.tanh(input.wyu * u + input.wyv * v + input.by) * S;\n    const z = Math.tanh(input.wzu * u + input.wzv * v + input.bz) * S;\n    \n    const r = sig(input.wru * u + input.wrv * v + input.br);\n    const g = sig(input.wgu * u + input.wgv * v + input.bg);\n    const b = sig(input.wbu * u + input.wbv * v + input.bb);\n    \n    return { x, y, z, r, g, b, a: 1 };\n}"
+    "code": "function surface(input) {\n    const u = input.u;\n    const v = input.v;\n    const S = input.scale;\n    \n    const sig = (x) => 1 / (1 + Math.exp(-x));\n    \n    const x = (input.wxu * u + input.wxv * v + input.bx) * S;\n    const y = (input.wyu * u + input.wyv * v + input.by) * S;\n    const z = (input.wzu * u + input.wzv * v + input.bz) * S;\n    \n    const r = sig(input.wru * u + input.wrv * v + input.br);\n    const g = sig(input.wgu * u + input.wgv * v + input.bg);\n    const b = sig(input.wbu * u + input.wbv * v + input.bb);\n    \n    return { x, y, z, r, g, b, a: 1 };\n}"
   },
   "outputs": {
     "coordConversion": "none",
