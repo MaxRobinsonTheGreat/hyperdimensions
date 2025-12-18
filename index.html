@@ -30,6 +30,29 @@
             </div>
 
             <div id="controlsBody">
+
+                <div class="section">
+                    <div class="section-header" id="learnMoreHeader">
+                        <span class="section-caret" id="learnMoreCaret">▶</span>
+                        <span class="section-title">Learn More</span>
+                    </div>
+                    <div class="section-body" id="learnMoreBody">
+                        <div class="control-row">
+                            <div class="control-group learn-more-content">
+                                <p>This is a webtoy that allows you to create and visualize high-dimensional functions, or functions with lots of inputs and outputs.</p>
+                                <p>Click 'Load' to find some examples. 'Sphere' is a good place to start.</p>
+                                <p>Watch <a href="https://www.youtube.com/@EmergentGarden" target="_blank">this video</a> for an in-depth explanation.</p>
+                                <p>View the <a href="https://github.com/MaxRobinsonTheGreat/hyperdimensions" target="_blank">Source Code</a></p>
+                                <p>❤️Support my work❤️</p>
+                                <p><a href="https://ko-fi.com/emergentgarden" target="_blank">Buy me a Coffee</a></p>
+                                <p><a href="https://www.patreon.com/emergentgarden" target="_blank">Join my Patreon</a></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <hr class="section-divider">
+
                 <div class="section">
                     <div class="section-header" id="visualsHeader">
                         <span class="section-caret" id="visualsCaret">▶</span>
@@ -147,10 +170,10 @@
 
                 <div class="section">
                     <div class="section-header" id="surfaceHeader">
-                        <span class="section-caret" id="surfaceCaret">▼</span>
+                        <span class="section-caret" id="surfaceCaret">▶</span>
                         <span class="section-title">Surface function</span>
                     </div>
-                    <div class="section-body" id="surfaceBody">
+                    <div class="section-body" id="surfaceBody" style="display: none;">
                         <div class="control-row">
                             <div class="control-group">
                                 <textarea id="surfaceEditor" spellcheck="false"></textarea>
@@ -189,6 +212,9 @@
                         </div>
                     </div>
                 </div>
+
+                <hr class="section-divider">
+
             </div>
 
             <div id="sidebar-footer">
@@ -985,6 +1011,16 @@ function surface(input) {
                 const isHidden = outputsBody.style.display === 'none';
                 outputsBody.style.display = isHidden ? '' : 'none';
                 outputsCaret.textContent = isHidden ? '▼' : '▶';
+            });
+
+            const learnMoreHeader = document.getElementById('learnMoreHeader');
+            const learnMoreBody = document.getElementById('learnMoreBody');
+            const learnMoreCaret = document.getElementById('learnMoreCaret');
+
+            learnMoreHeader.addEventListener('click', () => {
+                const isHidden = learnMoreBody.style.display === 'none';
+                learnMoreBody.style.display = isHidden ? '' : 'none';
+                learnMoreCaret.textContent = isHidden ? '▼' : '▶';
             });
 
             const surfaceHeader = document.getElementById('surfaceHeader');

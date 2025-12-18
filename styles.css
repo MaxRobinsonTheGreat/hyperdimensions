@@ -554,3 +554,18 @@ body {
     align-items: center;
     gap: 8px;
 }
+
+.learn-more-content p {
+    margin: 4px 0;
+    font-size: 0.9rem;
+    color: #ccc;
+}
+
+.learn-more-content a {
+    color: #58a6ff;
+    text-decoration: none;
+}
+
+.learn-more-content a:hover {
+    text-decoration: underline;
+}
