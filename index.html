@@ -96,13 +96,39 @@
                         </div>
 
                         <div class="control-row">
-                            <div class="control-group-inline">
-                                <label for="dirIntensity">Light intensity</label>
-                                <input type="number" id="dirIntensity" min="0" max="3" step="0.1" value="1.0">
+                            <div class="control-group">
+                                <label for="dirIntensity">Directional Light</label>
+                                <div class="slider-container">
+                                    <input type="range" id="dirIntensitySlider" min="0" max="5" step="0.1" value="1.0">
+                                    <input type="number" id="dirIntensity" min="0" max="5" step="0.1" value="1.0" class="slider-number">
+                                </div>
                             </div>
-                            <div class="control-group-inline">
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="ambientIntensity">Ambient Light</label>
+                                <div class="slider-container">
+                                    <input type="range" id="ambientIntensitySlider" min="0" max="5" step="0.05" value="0.35">
+                                    <input type="number" id="ambientIntensity" min="0" max="5" step="0.05" value="0.35" class="slider-number">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
                                 <label for="shininess">Shininess</label>
-                                <input type="number" id="shininess" min="0" max="2000" step="10" value="100">
+                                <div class="slider-container">
+                                    <input type="range" id="shininessSlider" min="0" max="1000" step="10" value="100">
+                                    <input type="number" id="shininess" min="0" max="1000" step="10" value="100" class="slider-number">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="control-row">
+                            <div class="control-group">
+                                <label for="globalSaturation">Saturation</label>
+                                <div class="slider-container">
+                                    <input type="range" id="globalSaturationSlider" min="0" max="3" step="0.1" value="1.5">
+                                    <input type="number" id="globalSaturation" min="0" max="3" step="0.1" value="1.5" class="slider-number">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -289,6 +315,7 @@ function surface(input) {
         const animatedParams = [];
         let coordConversionMode = 'none'; // 'none' | 'spherical' | 'cylindrical'
         let convertRgbToHsv = false;
+        let globalSaturation = 1.5;
 
         function normalizeSurfaceOutput(raw) {
             const clamp01 = (v) => {
@@ -543,7 +570,21 @@ function surface(input) {
                     const out = normalizeSurfaceOutput(converted);
 
                     positions.setXYZ(idx, out.x, out.y, out.z);
-                    colors.setXYZW(idx, out.r, out.g, out.b, out.a);
+
+                    // Apply global saturation
+                    let r = out.r, g = out.g, b = out.b;
+                    if (globalSaturation !== 1.0) {
+                        const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                        r = lum + (r - lum) * globalSaturation;
+                        g = lum + (g - lum) * globalSaturation;
+                        b = lum + (b - lum) * globalSaturation;
+                        // Clamp
+                        r = r < 0 ? 0 : (r > 1 ? 1 : r);
+                        g = g < 0 ? 0 : (g > 1 ? 1 : g);
+                        b = b < 0 ? 0 : (b > 1 ? 1 : b);
+                    }
+
+                    colors.setXYZW(idx, r, g, b, out.a);
                     
                     idx++;
                 }
@@ -555,7 +596,7 @@ function surface(input) {
         }
 
         // --- Lighting ---
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
 
         const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
@@ -834,7 +875,13 @@ function surface(input) {
             const surfaceToggle = document.getElementById('showSurface');
             const wireToggle = document.getElementById('showWireframe');
             const dirIntensity = document.getElementById('dirIntensity');
+            const dirIntensitySlider = document.getElementById('dirIntensitySlider');
+            const ambientIntensity = document.getElementById('ambientIntensity');
+            const ambientIntensitySlider = document.getElementById('ambientIntensitySlider');
             const shininessInput = document.getElementById('shininess');
+            const shininessSlider = document.getElementById('shininessSlider');
+            const saturationInput = document.getElementById('globalSaturation');
+            const saturationSlider = document.getElementById('globalSaturationSlider');
             const autoRotateCheckbox = document.getElementById('autoRotate');
             const addParamBtn = document.getElementById('addParam');
             const globalParamControls = document.getElementById('globalParamControls');
@@ -933,20 +980,74 @@ function surface(input) {
                 if (wireframe) wireframe.visible = e.target.checked;
             });
 
+            function syncInput(src, dst) {
+                dst.value = src.value;
+            }
+
             dirIntensity.addEventListener('input', (e) => {
                 const v = parseFloat(e.target.value);
                 if (!Number.isNaN(v)) {
                     dirLight.intensity = v;
+                    syncInput(dirIntensity, dirIntensitySlider);
+                }
+            });
+            dirIntensitySlider.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    dirLight.intensity = v;
+                    syncInput(dirIntensitySlider, dirIntensity);
                 }
             });
 
-            shininessInput.addEventListener('input', () => {
+            ambientIntensity.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    ambientLight.intensity = v;
+                    syncInput(ambientIntensity, ambientIntensitySlider);
+                }
+            });
+            ambientIntensitySlider.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    ambientLight.intensity = v;
+                    syncInput(ambientIntensitySlider, ambientIntensity);
+                }
+            });
+
+            function updateShininess() {
                 if (!mesh || !Array.isArray(mesh.material) && !mesh.material) return;
                 const value = getCurrentShininess();
                 if (Array.isArray(mesh.material)) {
                     mesh.material.forEach(m => { if (m && 'shininess' in m) m.shininess = value; });
                 } else if ('shininess' in mesh.material) {
                     mesh.material.shininess = value;
+                }
+            }
+
+            shininessInput.addEventListener('input', () => {
+                updateShininess();
+                syncInput(shininessInput, shininessSlider);
+            });
+            shininessSlider.addEventListener('input', () => {
+                // Manually update input first so getCurrentShininess reads correct val (it reads from number input)
+                shininessInput.value = shininessSlider.value; 
+                updateShininess();
+            });
+
+            saturationInput.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    globalSaturation = v;
+                    syncInput(saturationInput, saturationSlider);
+                    scheduleGeometryUpdate();
+                }
+            });
+            saturationSlider.addEventListener('input', (e) => {
+                const v = parseFloat(e.target.value);
+                if (!Number.isNaN(v)) {
+                    globalSaturation = v;
+                    syncInput(saturationSlider, saturationInput);
+                    scheduleGeometryUpdate();
                 }
             });
             
@@ -1620,17 +1721,29 @@ function surface(input) {
                 wireToggle.checked = !!display.showWireframe;
                 if (wireframe) wireframe.visible = wireToggle.checked;
 
-                const dirVal = toNum(display.dirIntensity, 1);
+                const dirVal = toNum(display.dirIntensity, 1.0);
                 dirIntensity.value = String(dirVal);
+                dirIntensitySlider.value = String(dirVal);
                 dirLight.intensity = dirVal;
+
+                const ambientVal = toNum(display.ambientIntensity, 0.6);
+                ambientIntensity.value = String(ambientVal);
+                ambientIntensitySlider.value = String(ambientVal);
+                ambientLight.intensity = ambientVal;
 
                 const shininessVal = toNum(display.shininess, 100);
                 shininessInput.value = String(shininessVal);
+                shininessSlider.value = String(shininessVal);
                 if (mesh && !Array.isArray(mesh.material) && 'shininess' in mesh.material) {
                     mesh.material.shininess = shininessVal;
                 } else if (mesh && Array.isArray(mesh.material)) {
                     mesh.material.forEach(m => { if (m && 'shininess' in m) m.shininess = shininessVal; });
                 }
+
+                const saturationVal = toNum(display.globalSaturation, 1.5);
+                globalSaturation = saturationVal;
+                saturationInput.value = String(saturationVal);
+                saturationSlider.value = String(saturationVal);
 
                 if (display.camera) {
                     const pos = display.camera.position;
@@ -1754,7 +1867,9 @@ function surface(input) {
                     showSurface: !!surfaceToggle.checked,
                     showWireframe: !!wireToggle.checked,
                     dirIntensity: parseFloat(dirIntensity.value) || 0,
+                    ambientIntensity: parseFloat(ambientIntensity.value) || 0,
                     shininess: getCurrentShininess(),
+                    globalSaturation: globalSaturation,
                     camera: {
                         position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
                         target: { x: controls.target.x, y: controls.target.y, z: controls.target.z }

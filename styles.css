@@ -211,6 +211,21 @@ body {
     font-size: 0.85rem;
 }
 
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.slider-container input[type="range"] {
+    flex: 1;
+    min-width: 0;
+}
+
+.slider-number {
+    width: 60px;
+}
+
 .param-min,
 .param-max {
     max-width: 70px;
