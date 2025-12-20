@@ -7,9 +7,9 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/theme/dracula.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.0.0/math.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/mode/javascript/javascript.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.0.0/math.min.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -287,7 +287,6 @@
     <script type="module">
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-        import { ParametricGeometry } from 'three/addons/geometries/ParametricGeometry.js';
 
         // --- Parameters ---
         const params = {
@@ -319,86 +318,6 @@ function surface(input) {
         let convertRgbToHsv = false;
         let globalSaturation = 1.5;
 
-        function normalizeSurfaceOutput(raw) {
-            const clamp01 = (v) => {
-                if (typeof v !== 'number' || !Number.isFinite(v)) return 1;
-                if (v < 0) return 0;
-                if (v > 1) return 1;
-                return v;
-            };
-            const safePos = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
-
-            const data = raw || {};
-            const x = safePos(data.x);
-            const y = safePos(data.y);
-            const z = safePos(data.z);
-
-            const r = clamp01(data.r);
-            const g = clamp01(data.g);
-            const b = clamp01(data.b);
-            const a = clamp01(data.a != null ? data.a : 1);
-
-            return { x, y, z, r, g, b, a };
-        }
-
-        function applyOutputConversions(raw) {
-            if (!raw || typeof raw !== 'object') return raw;
-
-            let { x, y, z, r, g, b, a } = raw;
-
-            // Coordinate conversions interpret x,y,z as the chosen system
-            if (coordConversionMode === 'spherical') {
-                const radius = typeof x === 'number' ? x : 0;
-                const theta = typeof y === 'number' ? y : 0;
-                const phi = typeof z === 'number' ? z : 0;
-                const sinTheta = Math.sin(theta);
-                const cosTheta = Math.cos(theta);
-                const sinPhi = Math.sin(phi);
-                const cosPhi = Math.cos(phi);
-                x = radius * sinTheta * cosPhi;
-                y = radius * sinTheta * sinPhi;
-                z = radius * cosTheta;
-            } else if (coordConversionMode === 'cylindrical') {
-                const rho = typeof x === 'number' ? x : 0;
-                const phi = typeof y === 'number' ? y : 0;
-                const zVal = typeof z === 'number' ? z : 0;
-                const cosPhi = Math.cos(phi);
-                const sinPhi = Math.sin(phi);
-                x = rho * cosPhi;
-                y = rho * sinPhi;
-                z = zVal;
-            }
-
-            if (convertRgbToHsv) {
-                const rr = typeof r === 'number' ? r : 0;
-                const gg = typeof g === 'number' ? g : 0;
-                const bb = typeof b === 'number' ? b : 0;
-
-                const max = Math.max(rr, gg, bb);
-                const min = Math.min(rr, gg, bb);
-                const d = max - min;
-                let h = 0;
-                const v = max;
-                const s = max === 0 ? 0 : d / max;
-
-                if (d !== 0) {
-                    if (max === rr) {
-                        h = (gg - bb) / d + (gg < bb ? 6 : 0);
-                    } else if (max === gg) {
-                        h = (bb - rr) / d + 2;
-                    } else {
-                        h = (rr - gg) / d + 4;
-                    }
-                    h /= 6;
-                }
-
-                r = h;
-                g = s;
-                b = v;
-            }
-
-            return { x, y, z, r, g, b, a };
-        }
 
         function formatScalar(value) {
             if (typeof value !== 'number' || !Number.isFinite(value)) return '';
@@ -447,17 +366,34 @@ function surface(input) {
         let lastUSegs = -1;
         let lastVSegs = -1;
         
-        // This function is passed to ParametricGeometry constructor.
-        // It sets initial positions. We don't rely on it for colors or updates.
-        function meshFunction(u, v, target) {
-            const u_norm = params.uMin + u * (params.uMax - params.uMin);
-            const v_norm = params.vMin + v * (params.vMax - params.vMin);
-            surfaceInput.u = u_norm;
-            surfaceInput.v = v_norm;
-            // We only need position here
-            const converted = applyOutputConversions(surfaceFn(surfaceInput));
-            const out = normalizeSurfaceOutput(converted);
-            target.set(out.x, out.y, out.z);
+        function createGridGeometry(uSegs, vSegs) {
+            const geometry = new THREE.BufferGeometry();
+            const vertexCount = (uSegs + 1) * (vSegs + 1);
+            
+            // Buffers
+            const positions = new Float32Array(vertexCount * 3);
+            const colors = new Float32Array(vertexCount * 4);
+            const indices = [];
+
+            // Indices
+            for (let i = 0; i < vSegs; i++) {
+                for (let j = 0; j < uSegs; j++) {
+                    const a = i * (uSegs + 1) + j;
+                    const b = i * (uSegs + 1) + j + 1;
+                    const c = (i + 1) * (uSegs + 1) + j;
+                    const d = (i + 1) * (uSegs + 1) + j + 1;
+
+                    // Two triangles per square
+                    indices.push(a, b, d);
+                    indices.push(a, d, c);
+                }
+            }
+
+            geometry.setIndex(indices);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
+            
+            return geometry;
         }
 
         function getCurrentShininess() {
@@ -513,13 +449,9 @@ function surface(input) {
                 if (geometry) geometry.dispose();
 
                 // Create new geometry
-                geometry = new ParametricGeometry(meshFunction, uSegs, vSegs);
+                geometry = createGridGeometry(uSegs, vSegs);
                 lastUSegs = uSegs;
                 lastVSegs = vSegs;
-
-                // Create color attribute (RGBA)
-                const count = geometry.attributes.position.count;
-                geometry.setAttribute('color', new THREE.BufferAttribute(new Float32Array(count * 4), 4));
 
                 // Create Material
                 const material = new THREE.MeshPhongMaterial({
@@ -556,7 +488,15 @@ function surface(input) {
             const vMax = params.vMax;
             
             let idx = 0;
-            // ParametricGeometry iterates stacks (v) then slices (u)
+            const posArr = positions.array;
+            const colArr = colors.array;
+
+            // Pre-calculate constants for optimization
+            const isSpherical = coordConversionMode === 'spherical';
+            const isCylindrical = coordConversionMode === 'cylindrical';
+            const doHsv = convertRgbToHsv;
+            const doSat = globalSaturation !== 1.0;
+
             for (let i = 0; i <= vSegs; i++) {
                 const v = i / vSegs;
                 const v_norm = vMin + v * (vMax - vMin);
@@ -568,25 +508,84 @@ function surface(input) {
                     surfaceInput.u = u_norm;
                     surfaceInput.v = v_norm;
 
-                    const converted = applyOutputConversions(surfaceFn(surfaceInput));
-                    const out = normalizeSurfaceOutput(converted);
+                    const res = surfaceFn(surfaceInput) || {};
+                    
+                    // Direct access to avoid object creation
+                    let x = Number.isFinite(res.x) ? res.x : 0;
+                    let y = Number.isFinite(res.y) ? res.y : 0;
+                    let z = Number.isFinite(res.z) ? res.z : 0;
+                    let r = res.r; if(typeof r !== 'number') r = 1; else if(r<0) r=0; else if(r>1) r=1;
+                    let g = res.g; if(typeof g !== 'number') g = 1; else if(g<0) g=0; else if(g>1) g=1;
+                    let b = res.b; if(typeof b !== 'number') b = 1; else if(b<0) b=0; else if(b>1) b=1;
+                    let a = res.a != null ? res.a : 1; if(a<0) a=0; else if(a>1) a=1;
 
-                    positions.setXYZ(idx, out.x, out.y, out.z);
+                    // Apply Output Conversions
+                    if (isSpherical) {
+                        const radius = x;
+                        const theta = y;
+                        const phi = z;
+                        const sinTheta = Math.sin(theta);
+                        const cosTheta = Math.cos(theta);
+                        const sinPhi = Math.sin(phi);
+                        const cosPhi = Math.cos(phi);
+                        x = radius * sinTheta * cosPhi;
+                        y = radius * sinTheta * sinPhi;
+                        z = radius * cosTheta;
+                    } else if (isCylindrical) {
+                        const rho = x;
+                        const phi = y;
+                        const zVal = z;
+                        const cosPhi = Math.cos(phi);
+                        const sinPhi = Math.sin(phi);
+                        x = rho * cosPhi;
+                        y = rho * sinPhi;
+                        z = zVal;
+                    }
+
+                    if (doHsv) {
+                        const max = Math.max(r, g, b);
+                        const min = Math.min(r, g, b);
+                        const d = max - min;
+                        let h = 0;
+                        const vVal = max;
+                        const s = max === 0 ? 0 : d / max;
+
+                        if (d !== 0) {
+                            if (max === r) {
+                                h = (g - b) / d + (g < b ? 6 : 0);
+                            } else if (max === g) {
+                                h = (b - r) / d + 2;
+                            } else {
+                                h = (r - g) / d + 4;
+                            }
+                            h /= 6;
+                        }
+                        r = h;
+                        g = s;
+                        b = vVal;
+                    }
 
                     // Apply global saturation
-                    let r = out.r, g = out.g, b = out.b;
-                    if (globalSaturation !== 1.0) {
+                    if (doSat) {
                         const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                         r = lum + (r - lum) * globalSaturation;
                         g = lum + (g - lum) * globalSaturation;
                         b = lum + (b - lum) * globalSaturation;
                         // Clamp
-                        r = r < 0 ? 0 : (r > 1 ? 1 : r);
-                        g = g < 0 ? 0 : (g > 1 ? 1 : g);
-                        b = b < 0 ? 0 : (b > 1 ? 1 : b);
+                        if (r < 0) r = 0; else if (r > 1) r = 1;
+                        if (g < 0) g = 0; else if (g > 1) g = 1;
+                        if (b < 0) b = 0; else if (b > 1) b = 1;
                     }
 
-                    colors.setXYZW(idx, r, g, b, out.a);
+                    // Set buffers directly
+                    posArr[idx * 3] = x;
+                    posArr[idx * 3 + 1] = y;
+                    posArr[idx * 3 + 2] = z;
+
+                    colArr[idx * 4] = r;
+                    colArr[idx * 4 + 1] = g;
+                    colArr[idx * 4 + 2] = b;
+                    colArr[idx * 4 + 3] = a;
                     
                     idx++;
                 }
@@ -797,8 +796,14 @@ function surface(input) {
                     if (snapped < minVal) snapped = minVal;
                     if (snapped > maxVal) snapped = maxVal;
 
-                    state.valueInput.value = formatScalar(snapped);
-                    state.sliderInput.value = String(snapped);
+                    const newVal = formatScalar(snapped);
+                    if (state.valueInput.value !== newVal) {
+                        state.valueInput.value = newVal;
+                    }
+                    const newSliderVal = String(snapped);
+                    if (state.sliderInput.value !== newSliderVal) {
+                        state.sliderInput.value = newSliderVal;
+                    }
                     anyParamChanged = true;
                 });
             }

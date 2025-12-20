@@ -87,20 +87,6 @@ body {
     color: #fff;
 }
 
-.sidebar-header-actions {
-    display: flex;
-    gap: 8px;
-}
-
-.sidebar-header-actions button {
-    flex: 1;
-    padding: 8px 10px;
-    font-size: 0.9rem;
-}
-
-.sidebar-header-panel {
-    margin-top: 4px;
-}
 
 .header-panel {
     padding-top: 2px;
@@ -139,16 +125,6 @@ body {
     min-width: 0;
 }
 
-.header-panel-or {
-    margin-top: 6px;
-    font-size: 0.8rem;
-    color: #888;
-}
-
-#sidebar-wrapper.collapsed .sidebar-header-actions,
-#sidebar-wrapper.collapsed .sidebar-header-panel {
-    display: none;
-}
 
 #toggleSidebar {
     background: #333;
@@ -268,8 +244,6 @@ body {
 
 .control-group button,
 .control-group-inline button,
-.button-row button,
-.sidebar-header-actions button,
 .footer-buttons-grid button,
 .header-panel-row button {
     background: #444;
@@ -284,8 +258,6 @@ body {
 
 .control-group button:hover,
 .control-group-inline button:hover,
-.button-row button:hover,
-.sidebar-header-actions button:hover,
 .footer-buttons-grid button:hover,
 .header-panel-row button:hover {
     background: #555;
@@ -293,8 +265,6 @@ body {
 
 .control-group button:active,
 .control-group-inline button:active,
-.button-row button:active,
-.sidebar-header-actions button:active,
 .footer-buttons-grid button:active,
 .header-panel-row button:active {
     background: #666;
@@ -370,19 +340,6 @@ body {
     overflow-x: auto;
 }
 
-.button-row {
-    display: flex;
-    gap: 8px;
-    margin-top: 4px;
-}
-
-.button-row button {
-    flex: 1;
-    margin-bottom: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
 
 .section {
     margin-bottom: 8px;
@@ -430,10 +387,6 @@ body {
     margin: 8px 0 12px 0;
 }
 
-.parameters-title {
-    margin-top: 16px;
-    margin-bottom: 6px;
-}
 
 .control-group select,
 .control-group-inline select,
