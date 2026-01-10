@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Function Graph</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: black;
+        }
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+        #mutateBtn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(32, 32, 32, 0.9);
+            color: white;
+            border: 1px solid #666;
+            border-radius: 4px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            z-index: 10;
+        }
+        #mutateBtn:hover {
+            background: rgba(64, 64, 64, 0.95);
+        }
+        #mutateBtn:active {
+            background: rgba(80, 80, 80, 1);
+        }
+    </style>
+</head>
+<body>
+    <button id="mutateBtn">Mutate</button>
+    <canvas id="canvas"></canvas>
+    <script src="generator.js"></script>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let xMin = -2 * Math.PI;
+        let xMax = 2 * Math.PI;
+        let yMin = -2;
+        let yMax = 2;
+
+        let isPanning = false;
+        let panStart = { x: 0, y: 0 };
+        let panStartView = { xMin: 0, xMax: 0, yMin: 0, yMax: 0 };
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            draw();
+        }
+
+        function fn(x) {
+            return root.eval(x);
+        }
+
+        function draw() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const xRange = xMax - xMin;
+            const yRange = yMax - yMin;
+            
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, width, height);
+
+            const xZeroPos = ((0 - xMin) / xRange) * width;
+            const yZeroPos = ((yMax - 0) / yRange) * height;
+
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+
+            if (yZeroPos >= 0 && yZeroPos <= height) {
+                ctx.beginPath();
+                ctx.moveTo(0, yZeroPos);
+                ctx.lineTo(width, yZeroPos);
+                ctx.stroke();
+            }
+
+            if (xZeroPos >= 0 && xZeroPos <= width) {
+                ctx.beginPath();
+                ctx.moveTo(xZeroPos, 0);
+                ctx.lineTo(xZeroPos, height);
+                ctx.stroke();
+            }
+
+            ctx.strokeStyle = '#0f0';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+
+            let started = false;
+            for (let px = 0; px <= width; px++) {
+                const x = xMin + (px / width) * xRange;
+                const y = fn(x);
+                const py = ((yMax - y) / yRange) * height;
+
+                if (isFinite(y) && isFinite(py)) {
+                    if (!started) {
+                        ctx.moveTo(px, py);
+                        started = true;
+                    } else {
+                        ctx.lineTo(px, py);
+                    }
+                } else {
+                    started = false;
+                }
+            }
+
+            ctx.stroke();
+        }
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const xRange = xMax - xMin;
+            const yRange = yMax - yMin;
+            const worldX = xMin + (mouseX / width) * xRange;
+            const worldY = yMax - (mouseY / height) * yRange;
+            
+            const zoomFactor = e.deltaY > 0 ? 1.1 : 0.9;
+            
+            const newXRange = xRange * zoomFactor;
+            const newYRange = yRange * zoomFactor;
+            
+            xMin = worldX - (worldX - xMin) * zoomFactor;
+            xMax = worldX + (xMax - worldX) * zoomFactor;
+            yMin = worldY - (worldY - yMin) * zoomFactor;
+            yMax = worldY + (yMax - worldY) * zoomFactor;
+            
+            draw();
+        });
+
+        canvas.addEventListener('mousedown', (e) => {
+            isPanning = true;
+            panStart.x = e.clientX;
+            panStart.y = e.clientY;
+            panStartView = { xMin, xMax, yMin, yMax };
+            canvas.style.cursor = 'grabbing';
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isPanning) return;
+            
+            const width = canvas.width;
+            const height = canvas.height;
+            const dx = e.clientX - panStart.x;
+            const dy = e.clientY - panStart.y;
+            
+            const xRange = panStartView.xMax - panStartView.xMin;
+            const yRange = panStartView.yMax - panStartView.yMin;
+            
+            const worldDx = -(dx / width) * xRange;
+            const worldDy = (dy / height) * yRange;
+            
+            xMin = panStartView.xMin + worldDx;
+            xMax = panStartView.xMax + worldDx;
+            yMin = panStartView.yMin + worldDy;
+            yMax = panStartView.yMax + worldDy;
+            
+            draw();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isPanning = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isPanning = false;
+            canvas.style.cursor = 'grab';
+        });
+
+        canvas.style.cursor = 'grab';
+
+        document.getElementById('mutateBtn').addEventListener('click', () => {
+            mutate(root);
+            draw();
+        });
+
+        window.addEventListener('resize', resize);
+        resize();
+    </script>
+</body>
+</html>
+
