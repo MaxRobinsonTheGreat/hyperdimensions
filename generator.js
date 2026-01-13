@@ -56,16 +56,20 @@ class Node {
             const sub_node = this.nodes[sub_node_i];
             // create a new random node
 
-            if (Math.random() < 0.5) {
+            const r = Math.random();
+            if (r < 0.7) {
+                // Strategy 1: Node Replacement (Swap operator, try to adopt children)
                 const newNode = newRandomNode(this.tree);
-                // get arrays of indices of nodes in newNode and sub_node
-                const remaining_new_i = newNode.nodes.map(node => newNode.nodes.indexOf(node));
-                const remaining_cur_i = sub_node.nodes.map(node => sub_node.nodes.indexOf(node));
+                
+                // simple index arrays [0, 1, ...]
+                const remaining_new_i = newNode.nodes.map((_, i) => i);
+                const remaining_cur_i = sub_node.nodes.map((_, i) => i);
+
                 // randomly replace nodes in newNode with nodes in sub_node, without duplication
                 while (remaining_new_i.length > 0 && remaining_cur_i.length > 0) {
                     // get random index from remaining_new_i
                     const new_i = remaining_new_i.splice(Math.floor(Math.random()*remaining_new_i.length), 1)[0];
-                    // get random node from remaining_cur_i
+                    // get random index from remaining_cur_i
                     const cur_i = remaining_cur_i.splice(Math.floor(Math.random()*remaining_cur_i.length), 1)[0];
                     // replace the node at new_i with the node at cur_i
                     newNode.nodes[new_i] = sub_node.nodes[cur_i];
@@ -73,13 +77,30 @@ class Node {
                 this.nodes[sub_node_i] = newNode;
             }
             else {
-                // get random node from random sub tree of parent
+                // Strategy 3: Grafting (Copy from another tree)
                 const other_nodes = this.tree.parent.getRandomTree().getNodes().filter(node => node !== sub_node);
-                const other_node = other_nodes[Math.floor(Math.random()*other_nodes.length)];
-                const graft_node = this.tree._cloneNode(other_node, this.tree);
-                this.nodes[sub_node_i] = graft_node;
+                if (other_nodes.length > 0) {
+                    const other_node = other_nodes[Math.floor(Math.random()*other_nodes.length)];
+                    const graft_node = this.tree._cloneNode(other_node, this.tree);
+                    this.nodes[sub_node_i] = graft_node;
+                }
             }
         }
+    }
+}
+
+class Root extends Node {
+    constructor(tree, start_node=null) {
+        super(tree)
+        this.nodes = [start_node === null ? new Variable(tree) : start_node]
+    }
+
+    eval(input) {
+        return this.nodes[0].eval(input);
+    }
+
+    getRawJS() {
+        return this.nodes[0].getRawJS();
     }
 }
 
@@ -168,7 +189,7 @@ class Divide extends VarParam {
     }
 }
 
-class Relu extends VarParam {
+class Max extends VarParam {
     eval(input) {
         const a = this.nodes[0].eval(input)
         const b = this.nodes[1].eval(input)
@@ -177,6 +198,17 @@ class Relu extends VarParam {
 
     getRawJS() {
         return `Math.max(${this.nodes[0].getRawJS()}, ${this.nodes[1].getRawJS()})`;
+    }
+}
+
+class Min extends VarParam {
+    eval(input) {
+        const a = this.nodes[0].eval(input)
+        const b = this.nodes[1].eval(input)
+        return Math.min(a, b);
+    }
+    getRawJS() {
+        return `Math.min(${this.nodes[0].getRawJS()}, ${this.nodes[1].getRawJS()})`;
     }
 }
 
@@ -313,7 +345,8 @@ const NodeBlocks = [
     Sine,
     Cosine,
     Tanh,
-    Relu,
+    Max,
+    Min,
     Abs,
     Sigmoid,
     Gaussian,
@@ -332,7 +365,7 @@ class Tree {
     constructor(parent=null) {
         this.parent = parent;
         this.inputNames = parent.inputNames;
-        this.root = new Add(this);
+        this.root = new Root(this, newRandomNode(this));
         this.fn = this.functionalize();
     }
 
@@ -417,8 +450,7 @@ class TreeFunction {
     }
 
     mutate() {
-        let toMutate = this.outputNames[Math.floor(Math.random()*this.outputNames.length)];
-        this.trees[toMutate].mutate();
+        this.getRandomTree().mutate();
     }
 
     getRandomTree() {
