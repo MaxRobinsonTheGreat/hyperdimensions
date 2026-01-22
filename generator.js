@@ -7,12 +7,21 @@ class FloatParameter {
 
     mutate(range) {
         this.value += (Math.random()-0.5) * range;
-        // this.value = Math.max(this.value, this.min);
-        // this.value = Math.min(this.value, this.max);
+    }
+
+    toString() {
+        const val = this.value;
+        return val > 0 ? val : `(${val})`;
+    }
+
+    toGLSL() {
+        let s = this.value.toString();
+        if (s.indexOf('.') === -1 && s.indexOf('e') === -1) s += '.0';
+        return this.value > 0 ? s : `(${s})`;
     }
 }
 
-class IntParameter{
+class IntParameter {
     constructor(value=null, min=null, max=null) {
         this.min = min === null ? -1 : min;
         this.max = max === null ? 1 : max;
@@ -21,25 +30,15 @@ class IntParameter{
     }
 
     mutate(range) {
-        // todo
+        this.value += Math.floor(Math.random() * range * 2) - range;
         this.value = Math.max(this.value, this.min);
         this.value = Math.min(this.value, this.max);
     }
 }
 
-class BoolParameter {
-    constructor(value=null) {
-        if (value === null)
-            this.value = Math.random() > 0.5 + 0;
-    }
-
-    mutate(_) {
-        this.value = !this.value + 0;
-    }
-}
-
 class Node {
     nodes = []; // sub_nodes
+    params = []; // params
 
     constructor(tree) {
         this.tree = tree;
@@ -49,36 +48,43 @@ class Node {
         throw new Error('Base node cannot eval');
     }
 
-    mutate() {
+    mutate(options) {
         if (this.nodes.length > 0) {
-            // get random sub node 
+            // sub node to mutate
             let sub_node_i = Math.floor(Math.random()*this.nodes.length);
             const sub_node = this.nodes[sub_node_i];
-            // create a new random node
 
-            const r = Math.random();
-            if (r < 0.7) {
-                // Strategy 1: Node Replacement (Swap operator, try to adopt children)
-                const newNode = newRandomNode(this.tree);
-                
-                // simple index arrays [0, 1, ...]
-                const remaining_new_i = newNode.nodes.map((_, i) => i);
-                const remaining_cur_i = sub_node.nodes.map((_, i) => i);
-
-                // randomly replace nodes in newNode with nodes in sub_node, without duplication
-                while (remaining_new_i.length > 0 && remaining_cur_i.length > 0) {
-                    // get random index from remaining_new_i
-                    const new_i = remaining_new_i.splice(Math.floor(Math.random()*remaining_new_i.length), 1)[0];
-                    // get random index from remaining_cur_i
-                    const cur_i = remaining_cur_i.splice(Math.floor(Math.random()*remaining_cur_i.length), 1)[0];
-                    // replace the node at new_i with the node at cur_i
-                    newNode.nodes[new_i] = sub_node.nodes[cur_i];
+            const replacement_mutation = options.graft_rate < Math.random();
+            if (replacement_mutation) {
+                // if current node is linear, we dont want to add a new linear, so exclude it
+                let available_nodes = options.available_nodes;
+                if (this instanceof Linear) {
+                    available_nodes = [...available_nodes.filter(node => node !== 'linear')];
                 }
+                const newNode = newRandomNode(this.tree, available_nodes);
+
+                if (Math.random() < 0.5) {
+                    // inherit subtree of replaced node
+
+                    const remaining_new_i = newNode.nodes.map((_, i) => i);
+                    const remaining_cur_i = sub_node.nodes.map((_, i) => i);
+
+                    // randomly replace nodes in newNode with nodes in sub_node, without duplication
+                    // (doesn't destroy sub trees)
+                    while (remaining_new_i.length > 0 && remaining_cur_i.length > 0) {
+                        const new_i = remaining_new_i.splice(Math.floor(Math.random()*remaining_new_i.length), 1)[0];
+                        const cur_i = remaining_cur_i.splice(Math.floor(Math.random()*remaining_cur_i.length), 1)[0];
+                        newNode.nodes[new_i] = sub_node.nodes[cur_i];
+                    }
+                }
+                // otherwise, just replace the node with the new node
                 this.nodes[sub_node_i] = newNode;
             }
             else {
-                // Strategy 3: Grafting (Copy from another tree)
-                const other_nodes = this.tree.parent.getRandomTree().getNodes().filter(node => node !== sub_node);
+                let source_function = options.gene_pool[Math.floor(Math.random()*options.gene_pool.length)];
+                let other_nodes = source_function.getRandomTree().getNodes()
+                other_nodes.shift(); // remove first root node, we never want to copy it
+                other_nodes = other_nodes.filter(node => node !== sub_node && node);
                 if (other_nodes.length > 0) {
                     const other_node = other_nodes[Math.floor(Math.random()*other_nodes.length)];
                     const graft_node = this.tree._cloneNode(other_node, this.tree);
@@ -86,6 +92,15 @@ class Node {
                 }
             }
         }
+    }
+
+    getRawJS() {
+        throw new Error('Base node cannot getRawJS');
+    }
+
+    getRawGLSL() {
+        // default to JS, many nodes will have the same GLSL as JS
+        return this.getRawJS();
     }
 }
 
@@ -102,6 +117,10 @@ class Root extends Node {
     getRawJS() {
         return this.nodes[0].getRawJS();
     }
+
+    getRawGLSL() {
+        return this.nodes[0].getRawGLSL();
+    }
 }
 
 class Variable extends Node {
@@ -114,7 +133,7 @@ class Variable extends Node {
         return input[this.name];
     }
 
-    mutate() {
+    mutate(options) {
         this.name = this.tree.inputNames[Math.floor(Math.random()*this.tree.inputNames.length)];
     }
 
@@ -123,7 +142,7 @@ class Variable extends Node {
     }
 }
 
-class Param extends Node {
+class Constant extends Node {
     constructor(tree) {
         super(tree)
         this.param = new FloatParameter();
@@ -133,27 +152,30 @@ class Param extends Node {
         return this.param.value;
     }
 
-    mutate() {
+    mutate(options) {
         this.param.mutate(1);
     }
 
     getRawJS() {
-        const val = this.param.value;
-        return val > 0 ? val : `(${val})`;
+        return this.param.toString();
+    }
+
+    getRawGLSL() {
+        return this.param.toGLSL();
     }
 }
 
-class VarParam extends Node {
+class Binary extends Node {
     constructor(tree) {
         super(tree)
         this.nodes = [
             new Variable(tree),
-            new Param(tree)
+            new Variable(tree)
         ]
     }
 }
 
-class Add extends VarParam {
+class Add extends Binary {
     eval(input) {
         const a = this.nodes[0].eval(input)
         const b = this.nodes[1].eval(input)
@@ -163,9 +185,13 @@ class Add extends VarParam {
     getRawJS() {
         return `(${this.nodes[0].getRawJS()} + ${this.nodes[1].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `(${this.nodes[0].getRawGLSL()} + ${this.nodes[1].getRawGLSL()})`;
+    }
 }
 
-class Multiply extends VarParam {
+class Multiply extends Binary {
     eval(input) {
         const a = this.nodes[0].eval(input)
         const b = this.nodes[1].eval(input)
@@ -175,9 +201,13 @@ class Multiply extends VarParam {
     getRawJS() {
         return `(${this.nodes[0].getRawJS()} * ${this.nodes[1].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `(${this.nodes[0].getRawGLSL()} * ${this.nodes[1].getRawGLSL()})`;
+    }
 }
 
-class Divide extends VarParam {
+class Divide extends Binary {
     eval(input) {
         const a = this.nodes[0].eval(input)
         const b = this.nodes[1].eval(input)
@@ -187,9 +217,13 @@ class Divide extends VarParam {
     getRawJS() {
         return `(${this.nodes[0].getRawJS()} / ${this.nodes[1].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `(${this.nodes[0].getRawGLSL()} / ${this.nodes[1].getRawGLSL()})`;
+    }
 }
 
-class Max extends VarParam {
+class Max extends Binary {
     eval(input) {
         const a = this.nodes[0].eval(input)
         const b = this.nodes[1].eval(input)
@@ -199,9 +233,13 @@ class Max extends VarParam {
     getRawJS() {
         return `Math.max(${this.nodes[0].getRawJS()}, ${this.nodes[1].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `max(${this.nodes[0].getRawGLSL()}, ${this.nodes[1].getRawGLSL()})`;
+    }
 }
 
-class Min extends VarParam {
+class Min extends Binary {
     eval(input) {
         const a = this.nodes[0].eval(input)
         const b = this.nodes[1].eval(input)
@@ -210,17 +248,41 @@ class Min extends VarParam {
     getRawJS() {
         return `Math.min(${this.nodes[0].getRawJS()}, ${this.nodes[1].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `min(${this.nodes[0].getRawGLSL()}, ${this.nodes[1].getRawGLSL()})`;
+    }
 }
 
-class Single extends Node {
+class Unary extends Node {
     constructor(tree) {
         super(tree)
         this.nodes = [new Variable(tree)]
     }
 }
 
-class Sine extends Single {
+class Linear extends Unary {
+    constructor(tree) {
+        super(tree)
+        this.params = [
+            new FloatParameter(),
+            new FloatParameter(),
+        ];
+    }
+    eval(input) {
+        return this.params[0].value * this.nodes[0].eval(input) + this.params[1].value;
+    }
 
+    getRawJS() {
+        return `(${this.params[0].toString()} * ${this.nodes[0].getRawJS()} + ${this.params[1].toString()})`;
+    }
+
+    getRawGLSL() {
+        return `(${this.params[0].toGLSL()} * ${this.nodes[0].getRawGLSL()} + ${this.params[1].toGLSL()})`;
+    }
+}
+
+class Sine extends Unary {
     eval(input) {
         return Math.sin(this.nodes[0].eval(input))
     }
@@ -228,9 +290,13 @@ class Sine extends Single {
     getRawJS() {
         return `Math.sin(${this.nodes[0].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `sin(${this.nodes[0].getRawGLSL()})`;
+    }
 }
 
-class Cosine extends Single {
+class Cosine extends Unary {
     eval(input) {
         return Math.cos(this.nodes[0].eval(input))
     }
@@ -238,9 +304,13 @@ class Cosine extends Single {
     getRawJS() {
         return `Math.cos(${this.nodes[0].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `cos(${this.nodes[0].getRawGLSL()})`;
+    }
 }
 
-class Tanh extends Single {
+class Tanh extends Unary {
     eval(input) { 
         return Math.tanh(this.nodes[0].eval(input)) 
     }
@@ -248,9 +318,14 @@ class Tanh extends Single {
     getRawJS() {
         return `Math.tanh(${this.nodes[0].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        const x = this.nodes[0].getRawGLSL();
+        return `((exp(2.0 * (${x})) - 1.0) / (exp(2.0 * (${x})) + 1.0))`;
+    }
 }
 
-class Abs extends Single {
+class Abs extends Unary {
     eval(input) {
         return Math.abs(this.nodes[0].eval(input))
     }
@@ -258,9 +333,13 @@ class Abs extends Single {
     getRawJS() {
         return `Math.abs(${this.nodes[0].getRawJS()})`;
     }
+
+    getRawGLSL() {
+        return `abs(${this.nodes[0].getRawGLSL()})`;
+    }
 }
 
-class Sigmoid extends Single {
+class Sigmoid extends Unary {
     eval(input) {
         return 1 / (1 + Math.exp(-this.nodes[0].eval(input)))
     }
@@ -268,9 +347,13 @@ class Sigmoid extends Single {
     getRawJS() {
         return `(1 / (1 + Math.exp(-${this.nodes[0].getRawJS()})))`;
     }
+
+    getRawGLSL() {
+        return `(1.0 / (1.0 + exp(-${this.nodes[0].getRawGLSL()})))`;
+    }
 }
 
-class Gaussian extends Single {
+class Gaussian extends Unary {
     eval(input) {
         return Math.exp(-Math.pow(this.nodes[0].eval(input), 2))
     }
@@ -278,15 +361,9 @@ class Gaussian extends Single {
     getRawJS() {
         return `Math.exp(-Math.pow(${this.nodes[0].getRawJS()}, 2))`;
     }
-}
 
-class Binary extends Single {
-    eval(input) {
-        return this.nodes[0].eval(input) > 0 ? 1 : 0;
-    }
-
-    getRawJS() {
-        return `(${this.nodes[0].getRawJS()} > 0) ? 1 : 0`;
+    getRawGLSL() {
+        return `exp(-pow(${this.nodes[0].getRawGLSL()}, 2.0))`;
     }
 }
 
@@ -304,29 +381,35 @@ class Block extends Node {
     getRawJS() {
         return `(${this.nodes.map(n => n.getRawJS()).join(' + ')})`;
     }
+
+    getRawGLSL() {
+        return `(${this.nodes.map(n => n.getRawGLSL()).join(' + ')})`;
+    }
 }
 
-class Exponential extends Node {
+class Power extends Unary {
     constructor(tree) {
         super(tree)
-        this.nodes = [
-            new Variable(tree),
-            new Param(tree)
-        ]
+        this.nodes = [new Variable(tree)]
+        this.params = [new FloatParameter()]
     }
 
     eval(input) {
-        const x_ = this.nodes[0].eval(input)
-        const pow = this.nodes[1].eval(input)
-        return Math.pow(Math.abs(x_), pow)
+        const x = this.nodes[0].eval(input)
+        const pow = this.params[0].value;
+        return Math.pow(Math.abs(x), pow)
+    }
+    
+    getRawJS() {
+        return `Math.pow(Math.abs(${this.nodes[0].getRawJS()}), ${this.params[0].toString()})`;
     }
 
-    getRawJS() {
-        return `Math.pow(Math.abs(${this.nodes[0].getRawJS()}), ${this.nodes[1].getRawJS()})`;
+    getRawGLSL() {
+        return `pow(abs(${this.nodes[0].getRawGLSL()}), ${this.params[0].toGLSL()})`;
     }
 }
 
-class TriangleWave extends Single {
+class TriangleWave extends Unary {
     eval(input) {
         const x = this.nodes[0].eval(input)
         return 2 * Math.abs(2 * (x - Math.floor(x + 0.5))) - 1
@@ -334,30 +417,37 @@ class TriangleWave extends Single {
 
     getRawJS() {
         const xExpr = this.nodes[0].getRawJS();
-        return `(2 * Math.abs(2 * (${xExpr} - Math.floor(${xExpr} + 0.5))) - 1)`;
+        return `((x => 2 * Math.abs(2 * (x - Math.floor(x + 0.5))) - 1)(${xExpr}))`;
+    }
+
+    getRawGLSL() {
+        const x = this.nodes[0].getRawGLSL();
+        return `(2.0 * abs(2.0 * (${x} - floor(${x} + 0.5))) - 1.0)`;
     }
 }
 
-const NodeBlocks = [
-    Add,
-    Multiply,
-    Divide,
-    Sine,
-    Cosine,
-    Tanh,
-    Max,
-    Min,
-    Abs,
-    Sigmoid,
-    Gaussian,
-    Binary,
-    // Block,
-    TriangleWave,
-    // Exponential,
-]
+const NodeBlocks = {
+    "add": Add,
+    "multiply": Multiply,
+    "divide": Divide,
+    "linear": Linear,
+    "sine": Sine,
+    "cosine": Cosine,
+    "tanh": Tanh,
+    "max": Max,
+    "min": Min,
+    "abs": Abs,
+    "sigmoid": Sigmoid,
+    "gaussian": Gaussian,
+    "power": Power,
+    "triangle_wave": TriangleWave,
+}
 
-function newRandomNode(tree) {
-    return new NodeBlocks[Math.floor(Math.random()*NodeBlocks.length)](tree);
+function newRandomNode(tree, available_nodes=null) {
+    if (available_nodes === null) {
+        available_nodes = Object.keys(NodeBlocks);
+    }
+    return new NodeBlocks[available_nodes[Math.floor(Math.random()*available_nodes.length)]](tree);
 }
 
 
@@ -365,7 +455,7 @@ class Tree {
     constructor(parent=null) {
         this.parent = parent;
         this.inputNames = parent.inputNames;
-        this.root = new Root(this, newRandomNode(this));
+        this.root = new Root(this, new Linear(this));
         this.fn = this.functionalize();
     }
 
@@ -379,6 +469,10 @@ class Tree {
 
     getRawJS() {
         return this.root.getRawJS();
+    }
+
+    getRawGLSL() {
+        return this.root.getRawGLSL();
     }
 
     functionalize() {
@@ -398,10 +492,47 @@ class Tree {
         return nodes;
     }
 
-    mutate() {
+    getParams(nodes=null) {
+        if (nodes === null) {
+            nodes = this.getNodes();
+        }
+        let params = [];
+        for (let node of nodes) {
+            params.push(...node.params);
+        }
+        return params;
+    }
+
+    grow(available_nodes=null) {
+        if (available_nodes === null) {
+            available_nodes = Object.keys(NodeBlocks);
+        }
+        // find a random leaf node and replace it with a new node
+        let parent = null;
+        let cur = this.root;
+        while (cur.nodes.length > 0) {
+            parent = cur;
+            cur = cur.nodes[Math.floor(Math.random()*cur.nodes.length)];
+        }
+        const newNode = newRandomNode(this, available_nodes);
+        const index = parent.nodes.indexOf(cur);
+        parent.nodes[index] = newNode;
+        this.fn = this.functionalize();
+    }
+
+    mutate(options) {
         let nodes = this.getNodes();
-        let i = Math.floor(Math.random()*nodes.length);
-        nodes[i].mutate();
+        let params = this.getParams(nodes);
+        let param_mutation = Math.random() < options.param_mutation_rate;
+        if (params.length > 0 && param_mutation) {
+            let i = Math.floor(Math.random()*params.length);
+            params[i].mutate(options.param_mutation_range);
+        }
+        let node_mutation = Math.random() < options.node_mutation_rate;
+        if (nodes.length > 0 && node_mutation) {
+            let i = Math.floor(Math.random()*nodes.length);
+            nodes[i].mutate(options);
+        }
         this.fn = this.functionalize();
     }
 
@@ -416,9 +547,10 @@ class Tree {
         let copy = Object.create(Object.getPrototypeOf(node));
         copy.tree = targetTree;
         copy.nodes = [];
+        copy.params = [];
         if (node.name !== undefined) copy.name = node.name;
-        if (node.param !== undefined) {
-            copy.param = new FloatParameter(node.param.value, node.param.min, node.param.max);
+        for (let param of node.params) {
+            copy.params.push(new FloatParameter(param.value, param.min, param.max));
         }
         if (node.num !== undefined) {
             copy.num = new IntParameter(node.num.value, node.num.min, node.num.max);
@@ -432,49 +564,158 @@ class Tree {
 }
 
 class TreeFunction {
-    constructor(inputNames, outputNames) {
+    constructor(inputNames, outputNames, useInputTrees=true) {
         this.inputNames = inputNames;
         this.outputNames = outputNames;
+        this.useInputTrees = useInputTrees;
         this.trees = {};
         for (let outputName of outputNames) {
             this.trees[outputName] = new Tree(this);
         }
+        this.inputTrees = {};
+        if (useInputTrees) {
+            this.initInputTrees();
+        }
+    }
+
+    initInputTrees() {
+        this.useInputTrees = true;
+        if (this.useInputTrees) {
+            for (let inputName of this.inputNames) {
+                this.inputTrees[inputName] = new Tree(this);
+            }
+        }
+    }
+
+    randomizeTrees(size=5, available_nodes=null) {
+        for (let outputName in this.trees) {
+            const treeSize = size === null ? Math.floor(Math.random() * 6) + 1 : size;
+            for (let i = 0; i < treeSize; i++) {
+                this.trees[outputName].grow(available_nodes);
+            }
+        }
+        if (this.useInputTrees) {
+            for (let inputName in this.inputTrees) {
+                const treeSize = size === null ? Math.floor(Math.random() * 6) + 1 : size;
+                for (let i = 0; i < treeSize; i++) {
+                    this.inputTrees[inputName].grow(available_nodes);
+                }
+            }
+        }
     }
 
     eval(input) {
+        let transformedInput = input;
+        if (this.useInputTrees) {
+            transformedInput = Object.assign({}, input);
+            for (let inputName in this.inputTrees) {
+                transformedInput[inputName] = this.inputTrees[inputName].eval(input);
+            }
+        }
         let outputs = {};
         for (let outputName in this.trees) {
-            outputs[outputName] = this.trees[outputName].eval(input);
+            outputs[outputName] = this.trees[outputName].eval(transformedInput);
         }
         return outputs;
     }
 
-    mutate() {
-        this.getRandomTree().mutate();
+    mutate(options={}) {
+        let default_options = {
+            param_mutation_rate: 0.5,
+            param_mutation_range: 1,
+            node_mutation_rate: 0.5,
+            graft_rate: 0.5,
+            gene_pool: [this],
+            available_nodes: Object.keys(NodeBlocks),
+        };
+        options = Object.assign(default_options, options);
+        this.getRandomTree().mutate(options);
     }
 
     getRandomTree() {
-        return this.trees[this.outputNames[Math.floor(Math.random()*this.outputNames.length)]];
+        const trees = [...Object.values(this.trees)];
+        if (this.useInputTrees) {
+            trees.push(...Object.values(this.inputTrees));
+        }
+        return trees[Math.floor(Math.random()*trees.length)];
+    }
+
+    getGLSL(function_name) {
+        let inputs = this.inputNames.map(name => `in float _in_${name}`).join(', ');
+        let outputs = this.outputNames.map(name => `out float _out_${name}`).join(', ');
+        let args = [inputs, outputs].filter(s => s.length > 0).join(', ');
+        
+        let code = `void ${function_name}(${args}) {\n`;
+        
+        // Initialize variables from inputs
+        for (let name of this.inputNames) {
+            code += `    float ${name} = _in_${name};\n`;
+        }
+        
+        if (this.useInputTrees) {
+            // Compute transformed inputs first (using original values)
+            let transforms = [];
+            for (let name of this.inputNames) {
+                if (this.inputTrees[name]) {
+                    transforms.push(`    float _next_${name} = ${this.inputTrees[name].getRawGLSL()};\n`);
+                } else {
+                    transforms.push(`    float _next_${name} = ${name};\n`);
+                }
+            }
+            code += transforms.join('');
+            
+            // Apply transformations
+            for (let name of this.inputNames) {
+                code += `    ${name} = _next_${name};\n`;
+            }
+        }
+        
+        // Compute outputs
+        for (let name of this.outputNames) {
+            code += `    _out_${name} = ${this.trees[name].getRawGLSL()};\n`;
+        }
+        
+        code += `}\n`;
+        return code;
     }
 
     clone() {
-        let copy = new TreeFunction(this.inputNames, this.outputNames);
+        let copy = new TreeFunction(this.inputNames, this.outputNames, this.useInputTrees);
         for (let name of this.outputNames) {
             copy.trees[name] = this.trees[name].clone();
+        }
+        if (this.useInputTrees) {
+            for (let inputName of this.inputNames) {
+                copy.inputTrees[inputName] = this.inputTrees[inputName].clone();
+            }
         }
         return copy;
     }
 }
 
-
 function test() {
-    const treefn = new TreeFunction(["x"], ["y"]);
-    const tree = treefn.getRandomTree();
-    for (let i = 0; i < 1000; i++) {
-        tree.mutate();
+    const treefn = new TreeFunction(["x"], ["y"], false);
+    const num_mutations = 1000;
+    let largest = 0;
+    let last = 0;
+    let num_destructive = 0;
+    for (let i = 0; i < num_mutations; i++) {
+        treefn.mutate();
+        const treesize = treefn.getRandomTree().getNodes().length;
+        if (treesize > largest) {
+            largest = treesize;
+        }
+        if (treesize < last) {
+            num_destructive++;
+        }
+        last = treesize;
     }
-    test_len = 1000000
-    console.log(tree.getNodes().length);
+    const tree = treefn.getRandomTree();
+    console.log('largest', largest);
+    console.log('current', tree.getNodes().length);
+    console.log('num_destructive', num_destructive, '(', num_destructive / num_mutations * 100 + '%)');
+
+    const test_len = 1000000;
     let start_time = Date.now()
     let treefn_results = [];
     for (let i = 0; i < test_len; i++) {
@@ -492,7 +733,7 @@ function test() {
     let average_diff = 0;
     for (let i = 0; i < test_len; i++) {
         // if either result is nan, undefined, or null, print the index and the results
-        if (isNaN(treefn_results[i]) || isNaN(tree_results[i]) || treefn_results[i] === undefined || tree_results[i] === undefined || treefn_results[i] === null || tree_results[i] === null) {
+        if (isNaN(treefn_results[i]) || isNaN(tree_results[i])) {
             console.log('index', i, 'treefn_result', treefn_results[i], 'tree_result', tree_results[i]);
         }
         else {
