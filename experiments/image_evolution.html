@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Species Evolution</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 { margin-bottom: 20px; }
+        .controls {
+            background: #2a2a2a;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 900px;
+            width: 100%;
+        }
+        .control-group {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .parameter-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            padding-top: 10px;
+            border-top: 1px solid #444;
+        }
+        .param-item {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        .param-item label {
+            font-size: 0.85em;
+            color: #aaa;
+        }
+        .param-item input {
+            background: #333;
+            border: 1px solid #555;
+            color: white;
+            padding: 5px 8px;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            background: #4caf50;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        button:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+        button:hover:not(:disabled) {
+            background: #45a049;
+        }
+        button#stopBtn {
+            background: #f44336;
+        }
+        button#stopBtn:hover:not(:disabled) {
+            background: #d32f2f;
+        }
+        .main-container {
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .target-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .target-wrapper canvas {
+            border: 2px solid #666;
+            background: #000;
+            image-rendering: pixelated;
+            width: 256px;
+            height: 256px;
+        }
+        .species-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        .species-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 8px;
+            border-radius: 6px;
+            background: #333;
+            transition: all 0.2s;
+        }
+        .species-cell.best {
+            background: #1a4a1a;
+            box-shadow: 0 0 15px rgba(76, 175, 80, 0.5);
+        }
+        .species-cell canvas {
+            border: 2px solid #555;
+            background: #000;
+            image-rendering: pixelated;
+            width: 128px;
+            height: 128px;
+        }
+        .species-cell.best canvas {
+            border-color: #4caf50;
+        }
+        .species-label {
+            font-size: 0.75em;
+            color: #888;
+            margin-top: 5px;
+            text-align: center;
+        }
+        .species-fitness {
+            font-size: 0.7em;
+            color: #aaa;
+            font-family: monospace;
+        }
+        .species-cell.best .species-label {
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .stats {
+            margin-top: 20px;
+            font-family: monospace;
+            font-size: 1.1em;
+            background: #2a2a2a;
+            padding: 10px 20px;
+            border-radius: 4px;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .settings {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div class="controls">
+        <div class="control-group">
+            <input type="file" id="imageInput" accept="image/*">
+            <button id="startBtn" disabled>Start Evolution</button>
+            <button id="stopBtn" disabled>Stop</button>
+        </div>
+        
+        <div class="parameter-group">
+            <div class="param-item">
+                <label for="resInput">Resolution (px)</label>
+                <input type="number" id="resInput" value="32" min="32" max="256" step="32">
+            </div>
+            <div class="param-item">
+                <label for="offspringInput">Offspring per Species</label>
+                <input type="number" id="offspringInput" value="20" min="5" max="100">
+            </div>
+            <div class="param-item">
+                <label for="mutInput">Mutations per Offspring</label>
+                <input type="number" id="mutInput" value="5" min="1" max="50">
+            </div>
+            <div class="param-item">
+                <label for="crossoverInput">Crossover Rate</label>
+                <input type="number" id="crossoverInput" value="0.15" min="0" max="1" step="0.05">
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="target-wrapper">
+            <h3>Target Image</h3>
+            <canvas id="targetCanvas" width="32" height="32"></canvas>
+            <div class="settings" id="targetResDisplay">Resolution: 32x32</div>
+        </div>
+        
+        <div class="species-grid" id="speciesGrid"></div>
+    </div>
+
+    <div class="stats">
+        <span>Generation: <span id="genCount">0</span></span>
+        <span>Best Error: <span id="bestError">--</span></span>
+        <span>Best Species: <span id="bestSpecies">--</span></span>
+    </div>
+
+    <script src="function_trees.js"></script>
+    <script>
+        const NUM_SPECIES = 9;
+        
+        const targetCanvas = document.getElementById('targetCanvas');
+        const targetCtx = targetCanvas.getContext('2d', { willReadFrequently: true });
+        const speciesGrid = document.getElementById('speciesGrid');
+        
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const imageInput = document.getElementById('imageInput');
+        
+        const resInput = document.getElementById('resInput');
+        const offspringInput = document.getElementById('offspringInput');
+        const mutInput = document.getElementById('mutInput');
+        const crossoverInput = document.getElementById('crossoverInput');
+        const targetResDisplay = document.getElementById('targetResDisplay');
+
+        const genCount = document.getElementById('genCount');
+        const bestError = document.getElementById('bestError');
+        const bestSpeciesDisplay = document.getElementById('bestSpecies');
+
+        let isRunning = false;
+        let generation = 0;
+        let species = [];
+        let speciesCanvases = [];
+        let speciesCells = [];
+        let targetData = null;
+        let animationId = null;
+        let currentImgUrl = null;
+
+        let WIDTH = 32;
+        let HEIGHT = 32;
+        let OFFSPRING_PER_SPECIES = 20;
+        let MUTATIONS_PER_OFFSPRING = 5;
+        let CROSSOVER_RATE = 0.15;
+
+        function createSpeciesGrid() {
+            speciesGrid.innerHTML = '';
+            speciesCanvases = [];
+            speciesCells = [];
+            
+            for (let i = 0; i < NUM_SPECIES; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'species-cell';
+                
+                const canvas = document.createElement('canvas');
+                canvas.width = WIDTH;
+                canvas.height = HEIGHT;
+                
+                const label = document.createElement('div');
+                label.className = 'species-label';
+                label.innerHTML = `Species ${i + 1}<br><span class="species-fitness" id="fitness-${i}">--</span>`;
+                
+                cell.appendChild(canvas);
+                cell.appendChild(label);
+                speciesGrid.appendChild(cell);
+                
+                speciesCanvases.push(canvas);
+                speciesCells.push(cell);
+            }
+        }
+
+        function updateCanvasSize() {
+            WIDTH = parseInt(resInput.value);
+            HEIGHT = parseInt(resInput.value);
+            
+            targetCanvas.width = WIDTH;
+            targetCanvas.height = HEIGHT;
+            targetResDisplay.textContent = `Resolution: ${WIDTH}x${HEIGHT}`;
+            
+            createSpeciesGrid();
+        }
+
+        imageInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            if (currentImgUrl) URL.revokeObjectURL(currentImgUrl);
+            currentImgUrl = URL.createObjectURL(file);
+            
+            processTargetImage();
+        });
+
+        resInput.addEventListener('change', () => {
+            if (currentImgUrl) {
+                processTargetImage();
+            } else {
+                updateCanvasSize();
+            }
+        });
+
+        function processTargetImage() {
+            if (!currentImgUrl) return;
+
+            updateCanvasSize();
+            
+            const img = new Image();
+            img.onload = () => {
+                targetCtx.clearRect(0, 0, WIDTH, HEIGHT);
+                
+                const scale = Math.min(WIDTH / img.width, HEIGHT / img.height);
+                const x = (WIDTH - img.width * scale) / 2;
+                const y = (HEIGHT - img.height * scale) / 2;
+                
+                targetCtx.drawImage(img, x, y, img.width * scale, img.height * scale);
+                
+                const imageData = targetCtx.getImageData(0, 0, WIDTH, HEIGHT);
+                const data = imageData.data;
+                for (let i = 0; i < data.length; i += 4) {
+                    const avg = (data[i] + data[i + 1] + data[i + 2]) / 3;
+                    data[i] = avg;
+                    data[i + 1] = avg;
+                    data[i + 2] = avg;
+                }
+                targetCtx.putImageData(imageData, 0, 0);
+                
+                targetData = data;
+                
+                startBtn.disabled = false;
+                if (isRunning) stop();
+            };
+            img.src = currentImgUrl;
+        }
+
+        startBtn.addEventListener('click', () => {
+            if (isRunning) return;
+            
+            resInput.disabled = true;
+            offspringInput.disabled = true;
+            mutInput.disabled = true;
+            crossoverInput.disabled = true;
+            imageInput.disabled = true;
+
+            OFFSPRING_PER_SPECIES = parseInt(offspringInput.value);
+            MUTATIONS_PER_OFFSPRING = parseInt(mutInput.value);
+            CROSSOVER_RATE = parseFloat(crossoverInput.value);
+            
+            initSpecies();
+            isRunning = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            
+            loop();
+        });
+
+        stopBtn.addEventListener('click', stop);
+
+        function stop() {
+            isRunning = false;
+            cancelAnimationFrame(animationId);
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            
+            resInput.disabled = false;
+            offspringInput.disabled = false;
+            mutInput.disabled = false;
+            crossoverInput.disabled = false;
+            imageInput.disabled = false;
+        }
+
+        function initSpecies() {
+            generation = 0;
+            species = [];
+            
+            for (let i = 0; i < NUM_SPECIES; i++) {
+                const genome = new TreeFunction(["x", "y"], ["v"]);
+                genome.randomizeTrees(5 + i * 2);
+                
+                species.push({
+                    genome: genome,
+                    fitness: Infinity
+                });
+            }
+        }
+
+        function mapOutputToColor(val) {
+            return Math.floor((Math.tanh(val) * 0.5 + 0.5) * 255);
+        }
+
+        function calculateFitness(genome) {
+            let totalDiff = 0;
+            
+            for (let y = 0; y < HEIGHT; y++) {
+                const ny = (y / (HEIGHT - 1)) * 2 - 1;
+                for (let x = 0; x < WIDTH; x++) {
+                    const nx = (x / (WIDTH - 1)) * 2 - 1;
+                    
+                    const output = genome.eval({x: nx, y: ny});
+                    const val = mapOutputToColor(output.v);
+                    
+                    const idx = (y * WIDTH + x) * 4;
+                    const targetVal = targetData[idx];
+                    
+                    totalDiff += (val - targetVal) ** 2;
+                }
+            }
+            return totalDiff / (WIDTH * HEIGHT);
+        }
+
+        function drawGenome(genome, canvas) {
+            const ctx = canvas.getContext('2d');
+            const imgData = ctx.createImageData(WIDTH, HEIGHT);
+            const data = imgData.data;
+            
+            for (let y = 0; y < HEIGHT; y++) {
+                const ny = (y / (HEIGHT - 1)) * 2 - 1;
+                for (let x = 0; x < WIDTH; x++) {
+                    const nx = (x / (WIDTH - 1)) * 2 - 1;
+                    
+                    const output = genome.eval({x: nx, y: ny});
+                    const val = mapOutputToColor(output.v);
+                    
+                    const idx = (y * WIDTH + x) * 4;
+                    data[idx] = val;
+                    data[idx + 1] = val;
+                    data[idx + 2] = val;
+                    data[idx + 3] = 255;
+                }
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        function loop() {
+            if (!isRunning) return;
+
+            const allGenomes = species.map(s => s.genome);
+            
+            for (let i = 0; i < NUM_SPECIES; i++) {
+                if (species[i].fitness === Infinity) {
+                    species[i].fitness = calculateFitness(species[i].genome);
+                }
+                
+                let bestOffspring = null;
+                let bestOffspringFitness = species[i].fitness;
+                
+                for (let j = 0; j < OFFSPRING_PER_SPECIES; j++) {
+                    const childGenome = species[i].genome.clone();
+                    
+                    const numMutations = Math.floor(Math.random() * MUTATIONS_PER_OFFSPRING) + 1;
+                    for (let m = 0; m < numMutations; m++) {
+                        childGenome.mutate({
+                            crossover_rate: CROSSOVER_RATE,
+                            gene_pool: allGenomes,
+                            available_nodes: [
+                                "add",
+                                "subtract",
+                                "multiply",
+                                // "divide",
+                                // "modulo",
+                                "linear",
+                                "sine",
+                                "cosine",
+                                "tanh",
+                                // "max",
+                                // "min",
+                                // "abs",
+                                "sign",
+                                "sigmoid",
+                                "gaussian",
+                                // "power",
+                                "triangle_wave",
+                            ]
+                        })
+                    }
+                    
+                    const childFitness = calculateFitness(childGenome);
+                    
+                    if (childFitness < bestOffspringFitness) {
+                        bestOffspringFitness = childFitness;
+                        bestOffspring = childGenome;
+                    }
+                }
+                
+                if (bestOffspring) {
+                    species[i].genome = bestOffspring;
+                    species[i].fitness = bestOffspringFitness;
+                }
+            }
+
+            let globalBestIdx = 0;
+            let globalBestFitness = species[0].fitness;
+            
+            for (let i = 0; i < NUM_SPECIES; i++) {
+                drawGenome(species[i].genome, speciesCanvases[i]);
+                
+                document.getElementById(`fitness-${i}`).textContent = Math.floor(species[i].fitness).toLocaleString();
+                
+                speciesCells[i].classList.remove('best');
+                
+                if (species[i].fitness < globalBestFitness) {
+                    globalBestFitness = species[i].fitness;
+                    globalBestIdx = i;
+                }
+            }
+            
+            speciesCells[globalBestIdx].classList.add('best');
+
+            genCount.textContent = generation;
+            bestError.textContent = Math.floor(globalBestFitness).toLocaleString();
+            bestSpeciesDisplay.textContent = `#${globalBestIdx + 1}`;
+
+            generation++;
+
+            animationId = requestAnimationFrame(loop);
+        }
+
+        createSpeciesGrid();
+    </script>
+</body>
+</html>

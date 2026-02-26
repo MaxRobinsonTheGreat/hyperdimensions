@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symbolic Regression Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: #ccc;
+            font-family: sans-serif;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        #target-panel, #learned-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #333;
+        }
+        #learned-panel {
+            border-right: none;
+            border-left: 1px solid #333;
+        }
+        .panel-label {
+            padding: 6px 10px;
+            font-size: 11px;
+            color: #888;
+            border-bottom: 1px solid #333;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        #middle-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            border-right: 1px solid #333;
+        }
+        #canvas-container {
+            flex: 1;
+            background: #000;
+            border: 1px solid #333;
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #controls {
+            padding: 10px 0;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            background: #3e3e42;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px 12px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+        button:hover { background: #505050; }
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        input[type=range] {
+            width: 100px;
+        }
+        #stats {
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        iframe {
+            flex: 1;
+            border: none;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="target-panel">
+        <div class="panel-label">Target Function</div>
+        <iframe id="targetTreeFrame" src="tree_viewer.html"></iframe>
+    </div>
+    <div id="middle-panel">
+        <div id="controls">
+            <button id="resetBtn">New Target</button>
+            <button id="toggleBtn">Pause</button>
+            <button id="stepBtn">Step</button>
+            <div class="control-group">
+                <label for="speedSlider">Gen/s:</label>
+                <input type="range" id="speedSlider" min="1" max="60" value="5">
+                <span id="speedVal">5</span>
+            </div>
+            <span id="gen-status">Gen: 0</span>
+        </div>
+        <div id="canvas-container">
+            <canvas id="graphCanvas"></canvas>
+        </div>
+        <div id="stats"></div>
+    </div>
+    <div id="learned-panel">
+        <div class="panel-label">Learned Function</div>
+        <iframe id="treeFrame" src="tree_viewer.html"></iframe>
+    </div>
+
+    <script src="function_trees.js"></script>
+    <script>
+        const canvas = document.getElementById('graphCanvas');
+        const container = document.getElementById('canvas-container');
+        const ctx = canvas.getContext('2d');
+        const statsEl = document.getElementById('stats');
+        const genStatusEl = document.getElementById('gen-status');
+        const treeFrame = document.getElementById('treeFrame');
+        const targetTreeFrame = document.getElementById('targetTreeFrame');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedVal = document.getElementById('speedVal');
+        
+        let needsRedraw = true;
+        
+        let targetFunction;
+        let population = [];
+        let dataset = [];
+        let generation = 0;
+        let bestInd = null;
+        let isRunning = false;
+        let animationId;
+        let gensPerSec = 5;
+        let lastTime = 0;
+        let accumulator = 0;
+
+        // View State
+        let view = {
+            scaleX: 1,
+            scaleY: 1,
+            offsetX: 0,
+            offsetY: 0,
+            isDragging: false,
+            lastX: 0,
+            lastY: 0
+        };
+
+        const POP_SIZE = 100;
+        const DATA_POINTS = 50;
+        const DEFAULT_X_MIN = -5;
+        const DEFAULT_X_MAX = 5;
+
+        // Resize canvas
+        function resizeCanvas() {
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            needsRedraw = true;
+            draw();
+        }
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Canvas Interaction
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            const direction = e.deltaY > 0 ? -1 : 1;
+            const factor = 1 + direction * zoomSpeed;
+            
+            view.scaleX *= factor;
+            view.scaleY *= factor;
+            
+            draw();
+        });
+
+        container.addEventListener('mousedown', (e) => {
+            view.isDragging = true;
+            view.lastX = e.clientX;
+            view.lastY = e.clientY;
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (view.isDragging) {
+                const dx = e.clientX - view.lastX;
+                const dy = e.clientY - view.lastY;
+                view.offsetX += dx;
+                view.offsetY += dy;
+                view.lastX = e.clientX;
+                view.lastY = e.clientY;
+                draw();
+            }
+        });
+
+        window.addEventListener('mouseup', () => view.isDragging = false);
+        window.addEventListener('mouseleave', () => view.isDragging = false);
+
+
+        function init() {
+            // Generate Target Function
+            // Deep random function
+            targetFunction = new TreeFunction(['x'], ['y'], false);
+            // Force it to be somewhat deep/complex
+            targetFunction.trees['y'].grow(); 
+            targetFunction.trees['y'].grow();
+            targetFunction.trees['y'].grow(); 
+            // Also randomize
+            targetFunction.randomizeTrees(10); // Start with decent size
+
+            // Generate Dataset
+            dataset = [];
+            for (let i = 0; i < DATA_POINTS; i++) {
+                const x = DEFAULT_X_MIN + (DEFAULT_X_MAX - DEFAULT_X_MIN) * (i / (DATA_POINTS - 1));
+                const res = targetFunction.eval({x: x});
+                dataset.push({x: x, y: res.y});
+            }
+
+            // Init Population
+            population = [];
+            for (let i = 0; i < POP_SIZE; i++) {
+                const ind = new TreeFunction(['x'], ['y'], false);
+                ind.randomizeTrees(1); // Start very small (1 growth step)
+                population.push(ind);
+            }
+            
+            generation = 0;
+            bestInd = population[0];
+            
+            // Reset View
+            view.scaleX = 1;
+            view.scaleY = 1;
+            view.offsetX = 0;
+            view.offsetY = 0;
+            
+            needsRedraw = true;
+            resizeCanvas(); // Ensure size is correct
+            
+            // Don't auto-start
+            isRunning = false;
+            document.getElementById('toggleBtn').textContent = 'Resume';
+            cancelAnimationFrame(animationId);
+            draw();
+            
+            const targetTreeData = serializeForViewer(targetFunction.trees['y'].root);
+            targetTreeFrame.contentWindow.postMessage(targetTreeData, '*');
+        }
+
+        function evaluate(ind) {
+            let error = 0;
+            for (let point of dataset) {
+                const res = ind.eval({x: point.x});
+                const diff = point.y - res.y;
+                if (isNaN(diff) || !isFinite(diff)) {
+                    return Infinity;
+                }
+                error += diff * diff;
+            }
+            return error / dataset.length; // MSE
+        }
+
+        function evolve() {
+            // Evaluate all
+            const scored = population.map(ind => ({
+                ind: ind,
+                score: evaluate(ind)
+            }));
+
+            // Sort (lower score is better)
+            scored.sort((a, b) => a.score - b.score);
+
+            bestInd = scored[0].ind;
+            const bestScore = scored[0].score;
+
+            // Elitism - keep top 10%
+            const survivors = scored.slice(0, Math.floor(POP_SIZE * 0.1)).map(s => s.ind);
+            
+            const nextGen = [...survivors]; // Copy survivors
+
+            // Fill rest
+            while (nextGen.length < POP_SIZE) {
+                // Tournament selection
+                const p1 = scored[Math.floor(Math.random() * scored.length / 2)].ind; // Bias towards top half
+                
+                const child = p1.clone();
+                
+                // Mutate
+                child.mutate({
+                    param_mutation_rate: 0.5,
+                    node_mutation_rate: 0.3,
+                    graft_rate: 0.3,
+                    gene_pool: survivors, // Graft from good solutions
+                    param_mutation_range: Math.max(0.1, bestScore) // Adaptive mutation range?
+                });
+                
+                nextGen.push(child);
+            }
+            
+            population = nextGen;
+            generation++;
+            
+            updateStats(bestScore);
+            return bestScore;
+        }
+
+        function updateStats(score) {
+            genStatusEl.textContent = `Gen: ${generation}`;
+            statsEl.textContent = `Best MSE: ${score.toExponential(4)}`;
+        }
+
+        function serializeForViewer(treeNode) {
+            let type = treeNode.constructor.name;
+            let label = type;
+            let rawJS = null;
+            
+            // Get rawJS if available
+            if (treeNode.getRawJS) {
+                try {
+                    rawJS = treeNode.getRawJS();
+                } catch(e) {
+                    // Fallback if getRawJS fails
+                }
+            }
+
+            // Customize labels for nodes
+            if (type === 'Add') label = '+';
+            else if (type === 'Subtract') label = '-';
+            else if (type === 'Multiply') label = '*';
+            else if (type === 'Divide') label = '/';
+            else if (type === 'Variable') label = treeNode.name;
+            else if (type === 'Constant') label = treeNode.param.value.toFixed(2);
+            else if (type === 'Linear') label = `Linear`; 
+            
+            // Map children
+            const children = (treeNode.nodes || []).map(serializeForViewer);
+            
+            // For Linear, it has params.
+            if (type === 'Linear') {
+                 label = `${treeNode.params[0].value.toFixed(2)}x + ${treeNode.params[1].value.toFixed(2)}`;
+            }
+
+            return {
+                type: type,
+                label: label,
+                nodes: children,
+                rawJS: rawJS
+            };
+        }
+
+        let lastTreeUpdate = 0;
+        let cachedTargetPoints = [];
+        let cachedBestPoints = [];
+
+        function cacheFunctionPoints() {
+            if (!targetFunction || !dataset) return;
+            
+            // Calculate ranges based on data
+            let yMin = Infinity, yMax = -Infinity;
+            for (let p of dataset) {
+                if (p.y < yMin) yMin = p.y;
+                if (p.y > yMax) yMax = p.y;
+            }
+            const yRange = (yMax - yMin) || 1;
+            const dataYMin = yMin - yRange * 0.1;
+            const dataYMax = yMax + yRange * 0.1;
+            
+            const dataWidth = DEFAULT_X_MAX - DEFAULT_X_MIN;
+            const numPoints = Math.max(500, canvas.width); // High resolution
+            
+            // Cache target function points
+            cachedTargetPoints = [];
+            for (let i = 0; i <= numPoints; i++) {
+                const x = DEFAULT_X_MIN + (i / numPoints) * dataWidth;
+                const y = targetFunction.eval({x: x}).y;
+                cachedTargetPoints.push({x, y});
+            }
+            
+            // Cache best function points
+            cachedBestPoints = [];
+            if (bestInd) {
+                for (let i = 0; i <= numPoints; i++) {
+                    const x = DEFAULT_X_MIN + (i / numPoints) * dataWidth;
+                    const y = bestInd.eval({x: x}).y;
+                    cachedBestPoints.push({x, y});
+                }
+            }
+            
+            needsRedraw = false;
+        }
+
+        function draw() {
+            if (needsRedraw) {
+                cacheFunctionPoints();
+            }
+            
+            if (!dataset) return;
+            
+            // Clear
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate ranges
+            let yMin = Infinity, yMax = -Infinity;
+            for (let p of dataset) {
+                if (p.y < yMin) yMin = p.y;
+                if (p.y > yMax) yMax = p.y;
+            }
+            const yRange = (yMax - yMin) || 1;
+            const dataYMin = yMin - yRange * 0.1;
+            const dataYMax = yMax + yRange * 0.1;
+            const dataHeight = dataYMax - dataYMin;
+            const dataWidth = DEFAULT_X_MAX - DEFAULT_X_MIN;
+            
+            const cx = canvas.width / 2;
+            const cy = canvas.height / 2;
+            
+            const toScreenX = (x) => {
+                const normX = (x - DEFAULT_X_MIN) / dataWidth;
+                const worldX = normX * canvas.width;
+                return (worldX - cx) * view.scaleX + cx + view.offsetX;
+            };
+
+            const toScreenY = (y) => {
+                const normY = (y - dataYMin) / dataHeight;
+                const worldY = canvas.height - normY * canvas.height;
+                return (worldY - cy) * view.scaleY + cy + view.offsetY;
+            };
+
+            // Draw Axis
+            ctx.strokeStyle = '#333';
+            ctx.beginPath();
+            const y0 = toScreenY(0);
+            const x0 = toScreenX(0);
+            ctx.moveTo(0, y0);
+            ctx.lineTo(canvas.width, y0);
+            ctx.moveTo(x0, 0);
+            ctx.lineTo(x0, canvas.height);
+            ctx.stroke();
+
+            // Draw Dataset (Red dots)
+            ctx.fillStyle = '#ff4444';
+            for (let p of dataset) {
+                ctx.beginPath();
+                ctx.arc(toScreenX(p.x), toScreenY(p.y), 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Draw Target Line from cached points
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.3)';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            for (let i = 0; i < cachedTargetPoints.length; i++) {
+                const p = cachedTargetPoints[i];
+                const screenX = toScreenX(p.x);
+                const screenY = toScreenY(p.y);
+                if (i === 0) ctx.moveTo(screenX, screenY);
+                else ctx.lineTo(screenX, screenY);
+            }
+            ctx.stroke();
+
+            // Draw Best Fit from cached points
+            if (cachedBestPoints.length > 0) {
+                ctx.strokeStyle = '#4488ff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                for (let i = 0; i < cachedBestPoints.length; i++) {
+                    const p = cachedBestPoints[i];
+                    const screenX = toScreenX(p.x);
+                    const screenY = toScreenY(p.y);
+                    if (i === 0) ctx.moveTo(screenX, screenY);
+                    else ctx.lineTo(screenX, screenY);
+                }
+                ctx.stroke();
+            }
+            
+            // Update Tree View occasionally
+            if (bestInd) {
+                const now = Date.now();
+                if (now - lastTreeUpdate > 500) {
+                    const treeData = serializeForViewer(bestInd.trees['y'].root);
+                    treeFrame.contentWindow.postMessage(treeData, '*');
+                    lastTreeUpdate = now;
+                }
+            }
+        }
+
+        function loop(timestamp) {
+            if (!isRunning) return;
+            if (!lastTime) lastTime = timestamp;
+            const dt = timestamp - lastTime;
+            lastTime = timestamp;
+            
+            // Limit dt to avoid spiral of death on tab switch (max 1 second catch up)
+            accumulator += Math.min(dt, 1000);
+            
+            const msPerGen = 1000 / gensPerSec;
+            let updated = false;
+
+            while (accumulator >= msPerGen) {
+                evolve();
+                accumulator -= msPerGen;
+                updated = true;
+            }
+            
+            if (updated) {
+                needsRedraw = true;
+                draw();
+            }
+            animationId = requestAnimationFrame(loop);
+        }
+
+        // Controls
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            init();
+        });
+
+        document.getElementById('toggleBtn').addEventListener('click', () => {
+            isRunning = !isRunning;
+            document.getElementById('toggleBtn').textContent = isRunning ? 'Pause' : 'Resume';
+            if (isRunning) {
+                lastTime = 0;
+                accumulator = 0;
+                animationId = requestAnimationFrame(loop);
+            } else {
+                cancelAnimationFrame(animationId);
+            }
+        });
+
+        document.getElementById('stepBtn').addEventListener('click', () => {
+            isRunning = false;
+            document.getElementById('toggleBtn').textContent = 'Resume';
+            cancelAnimationFrame(animationId);
+            evolve();
+            needsRedraw = true;
+            draw();
+        });
+
+        speedSlider.addEventListener('input', (e) => {
+            gensPerSec = parseInt(e.target.value);
+            speedVal.textContent = gensPerSec;
+        });
+
+        // Start
+        let initialized = false;
+        let framesLoaded = 0;
+        function onFrameLoad() {
+            framesLoaded++;
+            if (framesLoaded >= 2 && !initialized) {
+                initialized = true;
+                init();
+            }
+        }
+        treeFrame.onload = onFrameLoad;
+        targetTreeFrame.onload = onFrameLoad;
+        // Fallback in case onload doesn't fire
+        setTimeout(() => {
+            if (!initialized) {
+                initialized = true;
+                init();
+            }
+        }, 500);
+
+    </script>
+</body>
+</html>

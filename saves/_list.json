@@ -98,5 +98,13 @@
     {
         "file": "taylor.json",
         "name": "Taylor Surface"
+    },
+    {
+        "file": "sea_urchin.json",
+        "name": "Sea Urchin"
+    },
+    {
+        "file": "alien_artifact.json",
+        "name": "Alien Artifact"
     }
 ]

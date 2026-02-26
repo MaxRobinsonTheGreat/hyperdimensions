@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tree Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #1e1e1e;
+            color: #cccccc;
+            font-family: sans-serif;
+            overflow: hidden;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        #controls {
+            padding: 10px;
+            background: #252526;
+            border-bottom: 1px solid #333;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            background: #3e3e42;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 5px 12px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+        button:hover { background: #505050; }
+        #canvas-container {
+            flex: 1;
+            position: relative;
+            overflow: auto;
+            cursor: grab;
+        }
+        #canvas-container:active {
+            cursor: grabbing;
+        }
+        #function-display {
+            padding: 12px 16px;
+            background: #252526;
+            border-bottom: 1px solid #333;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 14px;
+            color: #dcdcaa;
+            max-height: 120px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+        svg {
+            display: block;
+            width: 100%;
+            height: 100%;
+            user-select: none;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+        }
+        .link {
+            fill: none;
+            stroke: #555;
+            stroke-width: 2px;
+            transition: stroke 0.2s;
+        }
+        .node {
+            cursor: pointer;
+            transition: transform 0.3s ease-out;
+        }
+        .node circle {
+            fill: #2d2d30;
+            stroke: #007acc;
+            stroke-width: 2px;
+            transition: all 0.2s;
+        }
+        .node:hover circle {
+            fill: #3e3e42;
+            stroke: #4ec9b0;
+        }
+        .node text {
+            fill: #dcdcaa;
+            font-size: 12px;
+            font-weight: bold;
+            text-anchor: middle;
+            dominant-baseline: middle;
+            pointer-events: none;
+            font-family: 'Consolas', 'Monaco', monospace;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+        }
+        .node.leaf text { fill: #9cdcfe; }
+        .node.param text { fill: #b5cea8; }
+        body.embedded #controls,
+        body.embedded #function-display { display: none; }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button id="resetBtn">Reset View</button>
+        <div id="status" style="margin-left: auto; align-self: center; font-size: 0.9em; color: #888;">Waiting for tree data...</div>
+    </div>
+    <div id="function-display">No function loaded</div>
+    <div id="canvas-container">
+        <svg id="svg">
+            <g id="viewport"></g>
+        </svg>
+    </div>
+
+    <script>
+        if (window !== window.parent) document.body.classList.add('embedded');
+
+        const svg = document.getElementById('svg');
+        const viewport = document.getElementById('viewport');
+        const container = document.getElementById('canvas-container');
+        const status = document.getElementById('status');
+        const functionDisplay = document.getElementById('function-display');
+        
+        let currentScale = 1;
+        let currentTranslate = { x: 0, y: 0 };
+        let isDragging = false;
+        let startDrag = { x: 0, y: 0 };
+
+        // Zoom/Pan
+        container.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            const direction = e.deltaY > 0 ? -1 : 1;
+            const newScale = Math.max(0.1, Math.min(5, currentScale + direction * zoomSpeed * currentScale));
+            
+            // Zoom towards mouse pointer logic could go here, keeping simple center zoom for now
+            currentScale = newScale;
+            updateTransform();
+        });
+
+        container.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            startDrag = { x: e.clientX - currentTranslate.x, y: e.clientY - currentTranslate.y };
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                currentTranslate.x = e.clientX - startDrag.x;
+                currentTranslate.y = e.clientY - startDrag.y;
+                updateTransform();
+            }
+        });
+
+        window.addEventListener('mouseup', () => isDragging = false);
+
+        document.getElementById('resetBtn').addEventListener('click', () => {
+            // Recenter
+            fitTree();
+        });
+
+        function updateTransform() {
+            viewport.setAttribute('transform', `translate(${currentTranslate.x}, ${currentTranslate.y}) scale(${currentScale})`);
+        }
+
+        let hasFitTree = false;
+        const ROOT_X = 0;
+        const ROOT_Y = 50;
+
+        // Tree Layout Logic
+        function renderTree(rootData) {
+            viewport.innerHTML = ''; // Clear
+            if (!rootData) return;
+
+            // 1. Calculate positions
+            // Simple approach: Assign x based on inorder traversal of leaves
+            
+            const LEVEL_HEIGHT = 60;
+            const NODE_RADIUS = 20;
+            const NODE_PADDING = 8;
+            const SIBLING_PADDING = 40;
+            
+            let leafCounter = 0;
+            const nodes = [];
+            const links = [];
+
+            function traverse(node, depth) {
+                // Simplify labels for basic operations
+                let displayLabel = node.label || node.type;
+                if (node.type === 'Add') displayLabel = '+';
+                else if (node.type === 'Multiply') displayLabel = '×';
+                else if (node.type === 'Divide') displayLabel = '÷';
+                
+                const nodeInfo = { 
+                    data: node, 
+                    depth: depth, 
+                    x: 0, 
+                    y: ROOT_Y + depth * LEVEL_HEIGHT,
+                    children: [],
+                    label: displayLabel,
+                    width: 0
+                };
+                
+                // Calculate width based on label length
+                const labelLength = nodeInfo.label.length;
+                nodeInfo.width = Math.max(NODE_RADIUS * 2, labelLength * 7 + NODE_PADDING * 2);
+                
+                nodes.push(nodeInfo);
+
+                if (node.nodes && node.nodes.length > 0) {
+                    let childrenXSum = 0;
+                    node.nodes.forEach(childData => {
+                        const childInfo = traverse(childData, depth + 1);
+                        nodeInfo.children.push(childInfo);
+                        links.push({ source: nodeInfo, target: childInfo });
+                        childrenXSum += childInfo.x;
+                    });
+                    nodeInfo.x = childrenXSum / nodeInfo.children.length;
+                } else {
+                    nodeInfo.x = leafCounter * (NODE_RADIUS * 3.5 + SIBLING_PADDING);
+                    leafCounter++;
+                }
+                return nodeInfo;
+            }
+
+            const root = traverse(rootData, 0);
+
+            // Center tree around root at x=0
+            const rootX = root.x;
+            nodes.forEach(n => n.x -= rootX);
+            root.x = ROOT_X;
+
+            // Draw Links
+            links.forEach(link => {
+                const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                path.setAttribute('class', 'link');
+                // Bezier curve
+                const d = `M${link.source.x},${link.source.y} C${link.source.x},${(link.source.y + link.target.y)/2} ${link.target.x},${(link.source.y + link.target.y)/2} ${link.target.x},${link.target.y}`;
+                path.setAttribute('d', d);
+                viewport.appendChild(path);
+            });
+
+            // Draw Nodes
+            nodes.forEach(node => {
+                const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                g.setAttribute('class', `node ${node.data.nodes.length === 0 ? 'leaf' : ''} ${node.data.type === 'Param' ? 'param' : ''}`);
+                g.setAttribute('transform', `translate(${node.x}, ${node.y})`);
+                
+                // Always use rounded rect
+                const width = node.width;
+                const height = NODE_RADIUS * 1.5;
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', -width/2);
+                rect.setAttribute('y', -height/2);
+                rect.setAttribute('width', width);
+                rect.setAttribute('height', height);
+                rect.setAttribute('rx', 4);
+                rect.setAttribute('ry', 4);
+                rect.style.fill = '#2d2d30';
+                rect.style.stroke = node.data.nodes.length === 0 ? '#9cdcfe' : '#007acc';
+                rect.style.strokeWidth = '2px';
+                g.appendChild(rect);
+
+                const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                text.textContent = node.label;
+                text.style.fill = '#dcdcaa';
+                text.style.fontSize = '12px';
+                text.style.fontWeight = 'bold';
+                text.style.textAnchor = 'middle';
+                text.style.dominantBaseline = 'middle';
+                text.style.pointerEvents = 'none';
+                g.appendChild(text);
+                
+                // Add tooltip title
+                const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+                title.textContent = `${node.data.type}: ${node.data.label}`;
+                g.appendChild(title);
+
+                viewport.appendChild(g);
+            });
+
+            fitTree(nodes);
+            status.textContent = `Tree Depth: ${Math.max(...nodes.map(n => n.depth))} | Nodes: ${nodes.length}`;
+            
+            const funcStr = buildFunctionString(rootData);
+            functionDisplay.textContent = funcStr;
+        }
+        
+        function buildFunctionString(node) {
+            if (!node) return '';
+            
+            // If rawJS is provided, use it directly
+            if (node.rawJS) {
+                return node.rawJS;
+            }
+            
+            // Fallback for backwards compatibility
+            return node.label || node.type || '?';
+        }
+
+        function fitTree(nodes) {
+            if (!nodes) {
+                // Reset to default: root at top middle
+                currentScale = 1;
+                currentTranslate = {x: container.clientWidth/2, y: 50};
+                updateTransform();
+                return;
+            }
+            
+            // Calculate bounding box for appropriate scale
+            const xs = nodes.map(n => n.x);
+            const ys = nodes.map(n => n.y);
+            const minX = Math.min(...xs) - 30;
+            const maxX = Math.max(...xs) + 30;
+            const minY = Math.min(...ys) - 30;
+            const maxY = Math.max(...ys) + 30;
+            
+            const width = maxX - minX;
+            const height = maxY - minY;
+            
+            // Calculate scale to fit tree
+            const scaleX = container.clientWidth / width;
+            const scaleY = (container.clientHeight - 100) / height; // Leave some padding at bottom
+            
+            currentScale = Math.min(scaleX, scaleY, 1.5) * 0.9;
+            
+            // Position root (at ROOT_X=0, ROOT_Y=50) at top middle of viewport
+            // Transform: root_screen = root_world * scale + translate
+            // We want root at (container.width/2, 80) in screen space
+            // So: translate = root_screen - root_world * scale
+            currentTranslate.x = (container.clientWidth / 2) - (ROOT_X * currentScale);
+            currentTranslate.y = 80 - (ROOT_Y * currentScale);
+            
+            updateTransform();
+        }
+
+        // Listen for messages
+        window.addEventListener('message', (event) => {
+            const data = event.data;
+            if (data && data.type && data.nodes) {
+                renderTree(data);
+            } else if (data && data.root) {
+                 // Handle {root: ...} wrapper if sent
+                 renderTree(data.root);
+            }
+        });
+        
+        // Also check URL params for encoded JSON (for small trees)
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const treeJson = params.get('tree');
+            if (treeJson) {
+                renderTree(JSON.parse(decodeURIComponent(treeJson)));
+            }
+        } catch(e) { console.error(e); }
+
+    </script>
+</body>
+</html>
