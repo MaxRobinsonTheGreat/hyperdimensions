@@ -38,6 +38,7 @@ body {
 
 #sidebar-wrapper.collapsed #controlsBody,
 #sidebar-wrapper.collapsed .sidebar-header h2,
+#sidebar-wrapper.collapsed .nav-link,
 #sidebar-wrapper.collapsed .control-row,
 #sidebar-wrapper.collapsed #sidebar-footer {
     display: none;

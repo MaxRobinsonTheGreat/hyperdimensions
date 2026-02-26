@@ -506,14 +506,17 @@
             const w = gridContainer.clientWidth;
             const h = gridContainer.clientHeight;
             const size = Math.min(w, h) * 0.95;
+            if (size <= 0) return;
             grid.style.width = size + 'px';
             grid.style.height = size + 'px';
 
-            const cellSize = size / 3 - 4;
+            const cellSize = Math.max(1, Math.floor(size / 3 - 4));
             const dpr = window.devicePixelRatio || 1;
+            sharedRenderer.setPixelRatio(dpr);
+            sharedRenderer.setSize(cellSize, cellSize);
             cells.forEach(c => {
-                c.renderer.setPixelRatio(dpr);
-                c.renderer.setSize(cellSize, cellSize);
+                c.displayCanvas.width = Math.round(cellSize * dpr);
+                c.displayCanvas.height = Math.round(cellSize * dpr);
                 c.camera.aspect = 1;
                 c.camera.updateProjectionMatrix();
             });
@@ -615,9 +618,9 @@
             div.className = 'cell';
             grid.appendChild(div);
 
-            const renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setClearColor(0x000000);
-            div.appendChild(renderer.domElement);
+            const displayCanvas = document.createElement('canvas');
+            displayCanvas.style.cssText = 'width:100%;height:100%;display:block;';
+            div.appendChild(displayCanvas);
 
             const scene = new THREE.Scene();
             const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
@@ -640,7 +643,7 @@
             const mesh = new THREE.Mesh(geometry, material);
             scene.add(mesh);
 
-            return { div, renderer, scene, camera, mesh, geometry, fn: null, index };
+            return { div, displayCanvas, scene, camera, mesh, geometry, fn: null, index };
         }
 
         function createGeometry() {
@@ -762,9 +765,17 @@
                 updateFullViewCamera();
                 fullViewCellData.renderer.render(fullViewCellData.scene, fullViewCellData.camera);
             } else {
-                cells.forEach(c => c.renderer.render(c.scene, c.camera));
+                cells.forEach(c => {
+                    if (!c.fn) return;
+                    sharedRenderer.render(c.scene, c.camera);
+                    const ctx = c.displayCanvas.getContext('2d');
+                    ctx.drawImage(sharedRenderer.domElement, 0, 0, c.displayCanvas.width, c.displayCanvas.height);
+                });
             }
         }
+
+        const sharedRenderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+        sharedRenderer.setClearColor(0x000000);
 
         for (let i = 0; i < cellCount; i++) {
             cells.push(createCell(i));
@@ -795,7 +806,7 @@
 
         function init() {
             restart();
-            checkOrientation();
+            requestAnimationFrame(() => requestAnimationFrame(checkOrientation));
             requestAnimationFrame(loop);
         }
 

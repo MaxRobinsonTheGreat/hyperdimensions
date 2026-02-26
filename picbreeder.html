@@ -695,38 +695,29 @@
         });
 
         // --- WebGL Setup ---
-        
+
+        const sharedGLCanvas = document.createElement('canvas');
+        sharedGLCanvas.width = resolution;
+        sharedGLCanvas.height = resolution;
+        const sharedGL = sharedGLCanvas.getContext('webgl', { preserveDrawingBuffer: true });
+        const _sharedBuf = sharedGL.createBuffer();
+        sharedGL.bindBuffer(sharedGL.ARRAY_BUFFER, _sharedBuf);
+        sharedGL.bufferData(sharedGL.ARRAY_BUFFER, new Float32Array([
+            -1.0, -1.0,  1.0, -1.0, -1.0,  1.0,
+            -1.0,  1.0,  1.0, -1.0,  1.0,  1.0]), sharedGL.STATIC_DRAW);
+
         function createCell(index) {
             const div = document.createElement('div');
             div.className = 'cell';
-            
-            const canvas = document.createElement('canvas');
-            canvas.width = resolution;
-            canvas.height = resolution;
-            div.appendChild(canvas);
-            
-            const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true });
-            
-            const buffer = gl.createBuffer();
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
-                -1.0, -1.0, 
-                 1.0, -1.0, 
-                -1.0,  1.0, 
-                -1.0,  1.0, 
-                 1.0, -1.0, 
-                 1.0,  1.0]), gl.STATIC_DRAW);
+
+            const displayCanvas = document.createElement('canvas');
+            displayCanvas.width = resolution;
+            displayCanvas.height = resolution;
+            div.appendChild(displayCanvas);
 
             grid.appendChild(div);
 
-            return { 
-                div, 
-                canvas, 
-                gl, 
-                fn: null, 
-                program: null,
-                index 
-            };
+            return { div, displayCanvas, fn: null, program: null, index };
         }
 
         for(let i=0; i<cellCount; i++) {
@@ -747,7 +738,7 @@
         }
 
         function updateCellShader(cell) {
-            const gl = cell.gl;
+            const gl = sharedGL;
             if (cell.program) gl.deleteProgram(cell.program);
 
             const vsSource = `
@@ -837,25 +828,32 @@
 
         function renderCell(cell) {
             if (!cell.program) return;
-            const gl = cell.gl;
+            const gl = sharedGL;
             gl.useProgram(cell.program);
-            
+
+            const posLoc = gl.getAttribLocation(cell.program, "position");
+            gl.enableVertexAttribArray(posLoc);
+            gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
             const timeLoc = gl.getUniformLocation(cell.program, "uTime");
             const offsetLoc = gl.getUniformLocation(cell.program, "uOffset");
             const scaleLoc = gl.getUniformLocation(cell.program, "uScale");
             const squishLoc = gl.getUniformLocation(cell.program, "uSquishMode");
             const colorModeLoc = gl.getUniformLocation(cell.program, "uColorMode");
-            
+
             const colorMode = document.getElementById('colorOutputSelect').value === 'hsv' ? 0 : 1;
-            
+
             gl.uniform1f(timeLoc, timeVal);
             gl.uniform2f(offsetLoc, viewState.offsetX, viewState.offsetY);
             gl.uniform1f(scaleLoc, viewState.scale);
             gl.uniform1i(squishLoc, squishMode);
             gl.uniform1i(colorModeLoc, colorMode);
-            
+
             gl.viewport(0, 0, resolution, resolution);
             gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+            const ctx = cell.displayCanvas.getContext('2d');
+            ctx.drawImage(sharedGLCanvas, 0, 0);
         }
 
         function renderAll() {
@@ -1159,7 +1157,7 @@
 
         function init() {
             restart();
-            checkOrientation();
+            requestAnimationFrame(() => requestAnimationFrame(checkOrientation));
             requestAnimationFrame(loop);
         }
 
