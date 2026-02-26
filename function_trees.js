@@ -30,9 +30,18 @@ class IntParameter {
     }
 
     mutate(range) {
-        this.value += Math.floor(Math.random() * range * 2) - range;
+        this.value += Math.max(1, Math.floor(Math.random() * range * 2) - range);
         this.value = Math.max(this.value, this.min);
         this.value = Math.min(this.value, this.max);
+    }
+
+    toString() {
+        const val = this.value;
+        return val > 0 ? val : `(${val})`;
+    }
+
+    toGLSL() {
+        return this.value.toFixed(1);
     }
 }
 
@@ -367,31 +376,11 @@ class Gaussian extends Unary {
     }
 }
 
-class Block extends Node {
-    constructor(tree) {
-        super(tree)
-        this.num = new IntParameter(null, 1, 10);
-        this.nodes = Array.from({length: this.num.value}, () => new Add(tree));
-    }
-
-    eval(input) {
-        return this.nodes.reduce((acc, node) => acc + node.eval(input), 0);
-    }
-
-    getRawJS() {
-        return `(${this.nodes.map(n => n.getRawJS()).join(' + ')})`;
-    }
-
-    getRawGLSL() {
-        return `(${this.nodes.map(n => n.getRawGLSL()).join(' + ')})`;
-    }
-}
-
 class Power extends Unary {
     constructor(tree) {
         super(tree)
         this.nodes = [new Variable(tree)]
-        this.params = [new FloatParameter()]
+        this.params = [new IntParameter(null, 1, 10)]
     }
 
     eval(input) {
@@ -426,10 +415,55 @@ class TriangleWave extends Unary {
     }
 }
 
+class Subtract extends Binary {
+    eval(input) {
+        return this.nodes[0].eval(input) - this.nodes[1].eval(input);
+    }
+    getRawJS() {
+        return `(${this.nodes[0].getRawJS()} - ${this.nodes[1].getRawJS()})`;
+    }
+    getRawGLSL() {
+        return `(${this.nodes[0].getRawGLSL()} - ${this.nodes[1].getRawGLSL()})`;
+    }
+}
+
+class Modulo extends Binary {
+    eval(input) {
+        const a = this.nodes[0].eval(input);
+        const b = this.nodes[1].eval(input);
+        if (Math.abs(b) < 1e-10) return 0;
+        return a - b * Math.floor(a / b);
+    }
+    getRawJS() {
+        const a = this.nodes[0].getRawJS();
+        const b = this.nodes[1].getRawJS();
+        return `((Math.abs(${b}) < 1e-10) ? 0 : (${a} - ${b} * Math.floor(${a} / ${b})))`;
+    }
+    getRawGLSL() {
+        const a = this.nodes[0].getRawGLSL();
+        const b = this.nodes[1].getRawGLSL();
+        return `(abs(${b}) < 1e-10 ? 0.0 : mod(${a}, ${b}))`;
+    }
+}
+
+class Sign extends Unary {
+    eval(input) {
+        return Math.sign(this.nodes[0].eval(input));
+    }
+    getRawJS() {
+        return `Math.sign(${this.nodes[0].getRawJS()})`;
+    }
+    getRawGLSL() {
+        return `sign(${this.nodes[0].getRawGLSL()})`;
+    }
+}
+
 const NodeBlocks = {
     "add": Add,
+    "subtract": Subtract,
     "multiply": Multiply,
     "divide": Divide,
+    "modulo": Modulo,
     "linear": Linear,
     "sine": Sine,
     "cosine": Cosine,
@@ -437,6 +471,7 @@ const NodeBlocks = {
     "max": Max,
     "min": Min,
     "abs": Abs,
+    "sign": Sign,
     "sigmoid": Sigmoid,
     "gaussian": Gaussian,
     "power": Power,
@@ -455,7 +490,7 @@ class Tree {
     constructor(parent=null) {
         this.parent = parent;
         this.inputNames = parent.inputNames;
-        this.root = new Root(this, new Linear(this));
+        this.root = new Root(this, new Variable(this));
         this.fn = this.functionalize();
     }
 

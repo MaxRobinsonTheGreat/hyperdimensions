@@ -1,0 +1,1265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Biomorphs</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body {
+            width: 100%;
+            height: 100%;
+            background: #111;
+            overflow: hidden;
+            display: flex;
+        }
+
+        #sidebar-wrapper {
+            display: flex;
+            height: 100%;
+            flex-shrink: 0;
+        }
+
+        #sidebar {
+            width: 260px;
+            height: 100%;
+            background: #1a1a1a;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: #ccc;
+            font-family: sans-serif;
+            font-size: 14px;
+        }
+
+        #sidebar-resizer {
+            width: 5px;
+            height: 100%;
+            background: #333;
+            cursor: col-resize;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        #sidebar-resizer:hover, body.resizing-sidebar #sidebar-resizer {
+            background: #4a9eff;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #333;
+            flex-shrink: 0;
+        }
+
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: #fff;
+        }
+
+        .controls-content {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 15px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            background: #222;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        input[type="number"], input[type="range"], select {
+            background: #333;
+            border: 1px solid #444;
+            color: white;
+            padding: 4px;
+            border-radius: 4px;
+            width: 60px;
+        }
+        select { width: 80px; }
+        input[type="range"] { width: 100%; }
+
+        #grid-container {
+            flex-grow: 1;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 90%;
+            height: 90%;
+            gap: 4px;
+        }
+
+        .cell {
+            position: relative;
+            cursor: grab;
+            overflow: hidden;
+            background: #000;
+        }
+
+        .cell::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            border: 2px solid #333;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .cell:hover::before {
+            border-color: #666;
+        }
+
+        .cell.selected::before {
+            border-color: #4a9eff;
+            border-width: 4px;
+        }
+
+        .cell canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #codeDisplay {
+            flex: 0 0 auto;
+            background: #111;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 10px;
+            overflow-y: auto;
+            max-height: 400px;
+            white-space: pre-wrap;
+            word-break: break-all;
+            flex: 1;
+        }
+        
+        #treeViewer {
+            width: 100%;
+            flex: 1;
+            min-height: 200px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            margin-top: 8px;
+        }
+
+        .function-section {
+            margin-bottom: 8px;
+        }
+
+        .function-header {
+            font-weight: bold;
+            color: #888;
+            margin-bottom: 4px;
+            font-size: 10px;
+            text-transform: uppercase;
+        }
+
+        .function-item {
+            margin-bottom: 2px;
+            color: #9cdcfe;
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 4px;
+            border: 1px solid transparent;
+        }
+        .function-item.selected {
+            background: #1e2a3a;
+            border-color: #4a9eff;
+        }
+
+        .function-name {
+            color: #4a9eff;
+        }
+
+        .input-function-name {
+            color: #f0a;
+        }
+
+        .expandable-section.collapsed .expandable-content {
+            max-height: 0 !important;
+            padding: 0 !important;
+            overflow: hidden;
+        }
+
+        .expandable-section.collapsed .expandable-arrow {
+            transform: rotate(-90deg);
+        }
+
+        #fullViewContainer {
+            display: none;
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: #000;
+            height: 100%;
+        }
+        #fullViewContainer.active { display: flex; }
+
+        #fullViewCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: grab;
+        }
+        #fullViewCanvas:active { cursor: grabbing; }
+
+        #gridControls, #fullViewControls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+        #gridControls button, #fullViewControls button {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        #gridControls button:hover:not(:disabled), #fullViewControls button:hover { background: #3b82d6; }
+        #gridControls button:disabled {
+            background: #333;
+            color: #666;
+            cursor: not-allowed;
+        }
+
+        .nav-link {
+            font-size: 11px;
+            color: #ccc;
+            background: #1e1e1e;
+            border: 1px solid #3a3a3a;
+            border-radius: 4px;
+            padding: 3px;
+            margin-top: 8px;
+            text-decoration: none;
+        }
+        .nav-link:hover { background: #2a2a2a; border-color: #555; color: #fff; }
+
+        body.portrait { flex-direction: column; }
+        body.portrait #sidebar-wrapper { width: 100%; height: auto; flex-direction: column-reverse; order: 2; flex-shrink: 0; }
+        body.portrait #sidebar { width: 100%; height: 220px; border-right: none; border-top: 1px solid #333; }
+        body.portrait #sidebar-resizer { width: 100%; height: 8px; cursor: row-resize; }
+        body.portrait #grid-container { order: 1; width: 100%; height: auto; }
+        body.portrait #fullViewContainer { order: 1; }
+    </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="sidebar-wrapper">
+        <div id="sidebar">
+            <div class="sidebar-header">
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2>Biomorphs</h2>
+                    <button style="margin: 0; width: auto; padding: 6px 12px; font-size: 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;" onclick="restart()">Restart</button>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <a href="index.html" class="nav-link">Functions</a>
+                    <a href="picbreeder.html" class="nav-link">Picbreeder</a>
+                </div>
+            </div>
+
+            <div class="controls-content">
+                <div class="control-group">
+                    <label>
+                        <span>Mutations</span>
+                        <input type="number" id="mutInput" min="1" max="50" value="5">
+                    </label>
+                    <label>
+                        <span>Param Rate</span>
+                        <input type="number" id="pRateInput" min="0" max="1" step="0.1" value="0.5">
+                    </label>
+                    <label>
+                        <span>Node Rate</span>
+                        <input type="number" id="nRateInput" min="0" max="1" step="0.1" value="0.5">
+                    </label>
+                    <label>
+                        <span>Param Range</span>
+                        <input type="number" id="sizeInput" min="0.1" max="10" step="0.1" value="1.0">
+                    </label>
+                    <label>
+                        <span>Transform Inputs</span>
+                        <input type="checkbox" id="inputTransBtn">
+                    </label>
+                    
+                    <div class="expandable-section collapsed" id="availableNodesSection" style="margin-top: 10px; border: 1px solid #333; border-radius: 4px; overflow: hidden;">
+                        <div class="expandable-header" style="padding: 8px 12px; background: #252526; cursor: pointer; user-select: none; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #ccc; font-weight: bold;">
+                            <span>Available Nodes</span>
+                            <span class="expandable-arrow" style="transition: transform 0.2s;">▼</span>
+                        </div>
+                        <div class="expandable-content" style="max-height: 300px; overflow-y: auto; background: #1a1a1a; padding: 10px; transition: max-height 0.3s ease-out;">
+                            <div class="node-list" id="nodeList" style="display: flex; flex-direction: column; gap: 6px;">
+                                <!-- Node checkboxes will be populated here -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>
+                        <span>Color Mode</span>
+                        <select id="colorOutputSelect">
+                            <option value="hsv">HSV</option>
+                            <option value="rgb">RGB</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Color Squish</span>
+                        <select id="squishModeSelect">
+                            <option value="0">Sigmoid</option>
+                            <option value="1">Clip</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label>
+                        <span>U/V Segments</span>
+                        <input type="number" id="segInput" min="10" max="200" value="60">
+                    </label>
+                    <label>
+                        <span>Coord Mode</span>
+                        <select id="coordModeSelect">
+                            <option value="cartesian">Cartesian</option>
+                            <option value="spherical">Spherical</option>
+                            <option value="cylindrical">Cylindrical</option>
+                        </select>
+                    </label>
+                </div>
+
+                <div class="control-group">
+                    <label>
+                        <input type="checkbox" id="animBtn" checked>
+                        <span>Animate Time</span>
+                    </label>
+                    <input type="range" id="timeSlider" min="-1" max="1" step="0.01" value="0">
+                    <div style="display:flex; justify-content:space-between; font-size:10px; color:#666;">
+                        <span>-1.0</span><span>0.0</span><span>1.0</span>
+                    </div>
+                </div>
+
+                <input type="range" id="distSlider" min="1" max="20" step="0.1" value="4" style="display:none">
+
+                <div id="codeDisplay"></div>
+                <iframe id="treeViewer" src="tree_viewer.html"></iframe>
+            </div>
+        </div>
+        <div id="sidebar-resizer"></div>
+    </div>
+
+    <div id="grid-container">
+        <div id="gridControls">
+            <button id="resetCameraBtn">Reset Camera</button>
+            <button id="viewFullBtn" disabled>View Full</button>
+        </div>
+        <div id="grid"></div>
+    </div>
+
+    <div id="fullViewContainer">
+        <div id="fullViewControls">
+            <button id="resetCameraBtn2">Reset Camera</button>
+            <button id="exitFullBtn">Exit Full</button>
+        </div>
+        <canvas id="fullViewCanvas"></canvas>
+    </div>
+
+    <script src="function_trees.js"></script>
+    <script type="module">
+        import * as THREE from 'three';
+
+        const grid = document.getElementById('grid');
+        const gridContainer = document.getElementById('grid-container');
+        const codeDisplay = document.getElementById('codeDisplay');
+        const treeViewer = document.getElementById('treeViewer');
+        const animBtn = document.getElementById('animBtn');
+        const timeSlider = document.getElementById('timeSlider');
+        const distSlider = document.getElementById('distSlider');
+        const segInput = document.getElementById('segInput');
+        const coordModeSelect = document.getElementById('coordModeSelect');
+        const colorOutputSelect = document.getElementById('colorOutputSelect');
+        const squishModeSelect = document.getElementById('squishModeSelect');
+        const availableNodesSection = document.getElementById('availableNodesSection');
+        const nodeList = document.getElementById('nodeList');
+        const viewFullBtn = document.getElementById('viewFullBtn');
+        const exitFullBtn = document.getElementById('exitFullBtn');
+        const resetCameraBtn = document.getElementById('resetCameraBtn');
+        const resetCameraBtn2 = document.getElementById('resetCameraBtn2');
+        const fullViewContainer = document.getElementById('fullViewContainer');
+        const fullViewCanvas = document.getElementById('fullViewCanvas');
+
+        const cellCount = 9;
+        const cells = [];
+        
+        function populateNodeList() {
+            const nodeNames = Object.keys(NodeBlocks);
+            nodeList.innerHTML = '';
+            nodeNames.forEach(nodeName => {
+                const item = document.createElement('div');
+                item.style.cssText = 'display: flex; align-items: center; gap: 8px; font-size: 12px; color: #ccc;';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = true;
+                checkbox.id = `node_${nodeName}`;
+                checkbox.style.cursor = 'pointer';
+                
+                const label = document.createElement('label');
+                label.htmlFor = `node_${nodeName}`;
+                label.textContent = nodeName;
+                label.style.cursor = 'pointer';
+                
+                item.appendChild(checkbox);
+                item.appendChild(label);
+                nodeList.appendChild(item);
+            });
+        }
+        
+        availableNodesSection.querySelector('.expandable-header').addEventListener('click', () => {
+            availableNodesSection.classList.toggle('collapsed');
+            const content = availableNodesSection.querySelector('.expandable-content');
+            const arrow = availableNodesSection.querySelector('.expandable-arrow');
+            if (availableNodesSection.classList.contains('collapsed')) {
+                content.style.maxHeight = '0';
+                content.style.padding = '0';
+                arrow.style.transform = 'rotate(-90deg)';
+            } else {
+                content.style.maxHeight = '300px';
+                content.style.padding = '10px';
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        });
+        
+        function getAvailableNodes() {
+            const checkboxes = nodeList.querySelectorAll('input[type="checkbox"]');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    const nodeName = cb.id.replace('node_', '');
+                    selected.push(nodeName);
+                }
+            });
+            return selected;
+        }
+        
+        populateNodeList();
+
+        let timeVal = 0.0;
+        let animDir = 1;
+        let animSpeed = 0.005;
+        let parentFn = null;
+        let selectedIndex = -1;
+        let currentSelectedTree = null;
+        let selectedTreeKey = null;
+        let isFullView = false;
+        let fullViewCellData = null;
+
+        let cameraState = {
+            phi: Math.PI / 4,
+            theta: Math.PI / 4,
+            distance: 4
+        };
+        let isDragging = false;
+        let lastMouse = { x: 0, y: 0 };
+
+        const sidebar = document.getElementById('sidebar');
+        const resizer = document.getElementById('sidebar-resizer');
+        let isResizing = false;
+
+        function resizeGrid() {
+            const w = gridContainer.clientWidth;
+            const h = gridContainer.clientHeight;
+            const size = Math.min(w, h) * 0.95;
+            grid.style.width = size + 'px';
+            grid.style.height = size + 'px';
+
+            const cellSize = size / 3 - 4;
+            const dpr = window.devicePixelRatio || 1;
+            cells.forEach(c => {
+                c.renderer.setPixelRatio(dpr);
+                c.renderer.setSize(cellSize, cellSize);
+                c.camera.aspect = 1;
+                c.camera.updateProjectionMatrix();
+            });
+        }
+
+        function checkOrientation() {
+            const portrait = window.innerWidth < window.innerHeight;
+            if (portrait) {
+                sidebar.style.width = '';
+            } else {
+                sidebar.style.height = '';
+            }
+            document.body.classList.toggle('portrait', portrait);
+            resizeGrid();
+        }
+
+        window.addEventListener('resize', () => {
+            checkOrientation();
+            if (isFullView) resizeFullViewRenderer();
+        });
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.classList.add('resizing-sidebar');
+            e.preventDefault();
+        });
+
+        resizer.addEventListener('touchstart', (e) => {
+            isResizing = true;
+            document.body.classList.add('resizing-sidebar');
+            e.preventDefault();
+        }, { passive: false });
+
+        function handleResizerMove(clientX, clientY) {
+            if (document.body.classList.contains('portrait')) {
+                const newHeight = window.innerHeight - clientY;
+                if (newHeight < 50 || newHeight > window.innerHeight - 100) return;
+                sidebar.style.height = newHeight + 'px';
+            } else {
+                const newWidth = clientX;
+                if (newWidth < 50 || newWidth > window.innerWidth - 100) return;
+                sidebar.style.width = newWidth + 'px';
+            }
+            requestAnimationFrame(resizeGrid);
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            handleResizerMove(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isResizing) return;
+            e.preventDefault();
+            handleResizerMove(e.touches[0].clientX, e.touches[0].clientY);
+        }, { passive: false });
+
+        window.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.classList.remove('resizing-sidebar');
+            }
+        });
+
+        window.addEventListener('touchend', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.classList.remove('resizing-sidebar');
+            }
+        });
+
+        function hsvToRgb(h, s, v) {
+            let r, g, b;
+            h = ((h % 1) + 1) % 1;
+            s = Math.max(0, Math.min(1, s));
+            v = Math.max(0, Math.min(1, v));
+            const i = Math.floor(h * 6);
+            const f = h * 6 - i;
+            const p = v * (1 - s);
+            const q = v * (1 - f * s);
+            const t = v * (1 - (1 - f) * s);
+            switch (i % 6) {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                case 5: r = v; g = p; b = q; break;
+            }
+            return [r, g, b];
+        }
+
+        function sigmoid(x) {
+            return 1 / (1 + Math.exp(-x));
+        }
+
+        function createCell(index) {
+            const div = document.createElement('div');
+            div.className = 'cell';
+            grid.appendChild(div);
+
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setClearColor(0x000000);
+            div.appendChild(renderer.domElement);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambient);
+            const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+            dir.position.set(5, 10, 7);
+            scene.add(dir);
+            const dir2 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dir2.position.set(-5, -5, -5);
+            scene.add(dir2);
+
+            const geometry = createGeometry();
+            const material = new THREE.MeshPhongMaterial({
+                vertexColors: true,
+                side: THREE.DoubleSide,
+                shininess: 30
+            });
+            const mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            return { div, renderer, scene, camera, mesh, geometry, fn: null, index };
+        }
+
+        function createGeometry() {
+            const segs = parseInt(segInput.value) || 60;
+            const geometry = new THREE.BufferGeometry();
+            const vertexCount = (segs + 1) * (segs + 1);
+            const positions = new Float32Array(vertexCount * 3);
+            const colors = new Float32Array(vertexCount * 3);
+            const indices = [];
+
+            for (let i = 0; i < segs; i++) {
+                for (let j = 0; j < segs; j++) {
+                    const a = i * (segs + 1) + j;
+                    const b = a + 1;
+                    const c = a + (segs + 1);
+                    const d = c + 1;
+                    indices.push(a, b, d, a, d, c);
+                }
+            }
+
+            geometry.setIndex(indices);
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            geometry.segs = segs;
+            return geometry;
+        }
+
+        function updateMesh(cellData) {
+            const { geometry, fn } = cellData;
+            if (!fn) return;
+
+            const segs = geometry.segs;
+            const positions = geometry.attributes.position.array;
+            const colors = geometry.attributes.color.array;
+            const coordMode = coordModeSelect.value;
+
+            let idx = 0;
+            for (let i = 0; i <= segs; i++) {
+                const v = (i / segs) * 2 - 1;
+                for (let j = 0; j <= segs; j++) {
+                    const u = (j / segs) * 2 - 1;
+                    const d = Math.sqrt(u*u + v*v + timeVal*timeVal);
+                    const res = fn.eval({ u, v, t: timeVal, d });
+
+                    let x = Number.isFinite(res.x) ? res.x : 0;
+                    let y = Number.isFinite(res.y) ? res.y : 0;
+                    let z = Number.isFinite(res.z) ? res.z : 0;
+
+                    if (coordMode === 'spherical') {
+                        const radius = x;
+                        const theta = y;
+                        const phi = z;
+                        x = radius * Math.sin(theta) * Math.cos(phi);
+                        y = radius * Math.sin(theta) * Math.sin(phi);
+                        z = radius * Math.cos(theta);
+                    } else if (coordMode === 'cylindrical') {
+                        const radius = x;
+                        const theta = y;
+                        const height = z;
+                        x = radius * Math.cos(theta);
+                        y = height;
+                        z = radius * Math.sin(theta);
+                    }
+
+                    const useClip = squishModeSelect.value === '1';
+                    const processColor = (x) => useClip ? Math.max(0, Math.min(1, x)) : sigmoid(x);
+
+                    const c1 = Number.isFinite(res.h) ? processColor(res.h) : 0.5;
+                    const c2 = Number.isFinite(res.s) ? processColor(res.s) : 0.5;
+                    const c3 = Number.isFinite(res.v) ? processColor(res.v) : 0.5;
+
+                    let r, g, b;
+                    if (colorOutputSelect.value === 'rgb') {
+                        [r, g, b] = [c1, c2, c3];
+                    } else {
+                        [r, g, b] = hsvToRgb(c1, c2, c3);
+                    }
+
+                    positions[idx * 3] = x;
+                    positions[idx * 3 + 1] = y;
+                    positions[idx * 3 + 2] = z;
+                    colors[idx * 3] = r;
+                    colors[idx * 3 + 1] = g;
+                    colors[idx * 3 + 2] = b;
+                    idx++;
+                }
+            }
+
+            geometry.attributes.position.needsUpdate = true;
+            geometry.attributes.color.needsUpdate = true;
+            geometry.computeVertexNormals();
+            geometry.computeBoundingSphere();
+
+            if (geometry.boundingSphere && geometry.boundingSphere.radius > 0) {
+                const scale = 1.5 / geometry.boundingSphere.radius;
+                cellData.mesh.scale.set(scale, scale, scale);
+                cellData.mesh.position.copy(geometry.boundingSphere.center).multiplyScalar(-scale);
+            }
+        }
+
+        function updateAllMeshes() {
+            cells.forEach(c => updateMesh(c));
+        }
+
+        function updateCameras() {
+            const dist = cameraState.distance;
+            const x = dist * Math.sin(cameraState.phi) * Math.cos(cameraState.theta);
+            const y = dist * Math.cos(cameraState.phi);
+            const z = dist * Math.sin(cameraState.phi) * Math.sin(cameraState.theta);
+
+            cells.forEach(c => {
+                c.camera.position.set(x, y, z);
+                c.camera.lookAt(0, 0, 0);
+            });
+        }
+
+        function renderAll() {
+            if (isFullView && fullViewCellData) {
+                updateFullViewCamera();
+                fullViewCellData.renderer.render(fullViewCellData.scene, fullViewCellData.camera);
+            } else {
+                cells.forEach(c => c.renderer.render(c.scene, c.camera));
+            }
+        }
+
+        for (let i = 0; i < cellCount; i++) {
+            cells.push(createCell(i));
+        }
+
+        function createRandomFn() {
+            const availableNodes = getAvailableNodes();
+            const useInputTrans = document.getElementById('inputTransBtn').checked;
+            const fn = new TreeFunction(["u", "v", "t", "d"], ["x", "y", "z", "h", "s", "v"], useInputTrans);
+            fn.randomizeTrees(null, availableNodes);
+            return fn;
+        }
+
+        function restart() {
+            for (let i = 0; i < cellCount; i++) {
+                cells[i].fn = createRandomFn();
+                updateMesh(cells[i]);
+            }
+            parentFn = cells[4].fn.clone();
+            selectedIndex = -1;
+            viewFullBtn.disabled = true;
+            if (isFullView) exitFullView();
+            updateCameras();
+            renderAll();
+        }
+
+        window.restart = restart;
+
+        function init() {
+            restart();
+            checkOrientation();
+            requestAnimationFrame(loop);
+        }
+
+        function spawnGeneration() {
+            const muts = parseInt(document.getElementById('mutInput').value);
+            const pRate = parseFloat(document.getElementById('pRateInput').value);
+            const nRate = parseFloat(document.getElementById('nRateInput').value);
+            const size = parseFloat(document.getElementById('sizeInput').value);
+            const useInputTrans = document.getElementById('inputTransBtn').checked;
+            const availableNodes = getAvailableNodes();
+
+            cells[4].fn = parentFn.clone();
+            
+            if (!useInputTrans) {
+                cells[4].fn.useInputTrees = false;
+                cells[4].fn.inputTrees = {};
+            } else if (!cells[4].fn.useInputTrees || Object.keys(cells[4].fn.inputTrees).length === 0) {
+                cells[4].fn.initInputTrees();
+            }
+            
+            updateMesh(cells[4]);
+
+            for (let i = 0; i < cellCount; i++) {
+                if (i === 4) continue;
+                const child = parentFn.clone();
+                
+                if (!useInputTrans) {
+                    child.useInputTrees = false;
+                    child.inputTrees = {};
+                } else if (!child.useInputTrees || Object.keys(child.inputTrees).length === 0) {
+                    child.initInputTrees();
+                }
+                
+                const count = Math.floor(Math.random() * muts) + 1;
+                for (let m = 0; m < count; m++) {
+                    child.mutate({
+                        param_mutation_rate: pRate,
+                        node_mutation_rate: nRate,
+                        param_mutation_range: size,
+                        available_nodes: availableNodes
+                    });
+                }
+                cells[i].fn = child;
+                updateMesh(cells[i]);
+            }
+
+            updateCodeDisplay(cells[4].fn);
+
+            if (selectedIndex !== -1 && cells[selectedIndex]) {
+                cells[selectedIndex].div.classList.remove('selected');
+            }
+            selectedIndex = -1;
+            viewFullBtn.disabled = true;
+            if (isFullView) exitFullView();
+
+            renderAll();
+        }
+
+        function selectCell(index, triggerEvolution) {
+            if (selectedIndex === index && triggerEvolution) {
+                parentFn = cells[index].fn.clone();
+                spawnGeneration();
+            } else {
+                if (selectedIndex !== -1 && cells[selectedIndex]) {
+                    cells[selectedIndex].div.classList.remove('selected');
+                }
+                selectedIndex = index;
+                cells[index].div.classList.add('selected');
+                viewFullBtn.disabled = false;
+                updateCodeDisplay(cells[index].fn);
+            }
+        }
+
+        function updateCodeDisplay(fn) {
+            if (!fn) return;
+            let html = '';
+            const functions = [];
+
+            html += '<div class="function-section"><div class="function-header">Position</div>';
+            for (let name of ['x', 'y', 'z']) {
+                const code = fn.trees[name].getRawJS();
+                const key = `output_${name}`;
+                const selectedClass = selectedTreeKey === key ? 'selected' : '';
+                html += `<div class="function-item ${selectedClass}" data-tree-key="${key}">`;
+                html += `<span class="function-name">${name}</span> = ${code}</div>`;
+                functions.push({key, tree: fn.trees[name]});
+            }
+            html += '</div>';
+
+            const colorLabel = colorOutputSelect.value === 'rgb' ? 'Color (RGB)' : 'Color (HSV)';
+            html += `<div class="function-section"><div class="function-header">${colorLabel}</div>`;
+            for (let name of ['h', 's', 'v']) {
+                const code = fn.trees[name].getRawJS();
+                const key = `output_${name}`;
+                const selectedClass = selectedTreeKey === key ? 'selected' : '';
+                html += `<div class="function-item ${selectedClass}" data-tree-key="${key}">`;
+                html += `<span class="function-name">${name}</span> = ${code}</div>`;
+                functions.push({key, tree: fn.trees[name]});
+            }
+            html += '</div>';
+
+            codeDisplay.innerHTML = html;
+            
+            document.querySelectorAll('.function-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    const key = item.getAttribute('data-tree-key');
+                    selectedTreeKey = key;
+                    document.querySelectorAll('.function-item').forEach(i => i.classList.remove('selected'));
+                    item.classList.add('selected');
+                    const funcData = functions.find(f => f.key === key);
+                    if (funcData) {
+                        currentSelectedTree = funcData.tree;
+                        updateTreeViewer();
+                    }
+                });
+            });
+            
+            if (functions.length > 0) {
+                if (!selectedTreeKey || !functions.find(f => f.key === selectedTreeKey)) {
+                    selectedTreeKey = functions[0].key;
+                }
+                const initialFunc = functions.find(f => f.key === selectedTreeKey);
+                if (initialFunc) {
+                    currentSelectedTree = initialFunc.tree;
+                    updateTreeViewer();
+                }
+            }
+        }
+        
+        function serializeNode(node) {
+            const data = {
+                type: node.constructor.name,
+                label: '',
+                nodes: []
+            };
+            
+            if (node.constructor.name === 'Constant') {
+                data.label = node.param?.value?.toFixed(2) || '?';
+            } else if (node.constructor.name === 'Variable') {
+                data.label = node.name || '?';
+            } else if (node.constructor.name === 'Linear') {
+                const a = node.params?.[0]?.value?.toFixed(2) || '?';
+                const b = node.params?.[1]?.value?.toFixed(2) || '?';
+                data.label = `${a}x+${b}`;
+            } else {
+                data.label = node.constructor.name;
+            }
+            
+            if (node.nodes && node.nodes.length > 0) {
+                data.nodes = node.nodes.map(n => serializeNode(n));
+            }
+            
+            return data;
+        }
+        
+        function initFullView() {
+            if (fullViewCellData) return;
+            const renderer = new THREE.WebGLRenderer({ canvas: fullViewCanvas, antialias: true });
+            renderer.setClearColor(0x000000);
+
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+
+            const ambient = new THREE.AmbientLight(0xffffff, 1.2);
+            scene.add(ambient);
+            const dir = new THREE.DirectionalLight(0xffffff, 1.2);
+            dir.position.set(5, 10, 7);
+            scene.add(dir);
+            const dir2 = new THREE.DirectionalLight(0xffffff, 0.8);
+            dir2.position.set(-5, -5, -5);
+            scene.add(dir2);
+
+            const geometry = createGeometry();
+            const material = new THREE.MeshPhongMaterial({ vertexColors: true, side: THREE.DoubleSide, shininess: 30 });
+            const mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            fullViewCellData = { renderer, scene, camera, mesh, geometry, fn: null, div: null, index: -1 };
+        }
+
+        function resizeFullViewRenderer() {
+            if (!fullViewCellData) return;
+            const rect = fullViewContainer.getBoundingClientRect();
+            const dpr = window.devicePixelRatio || 1;
+            fullViewCellData.renderer.setPixelRatio(dpr);
+            fullViewCellData.renderer.setSize(rect.width, rect.height);
+            fullViewCellData.camera.aspect = rect.width / rect.height;
+            fullViewCellData.camera.updateProjectionMatrix();
+        }
+
+        function updateFullViewCamera() {
+            if (!fullViewCellData) return;
+            const dist = cameraState.distance;
+            const x = dist * Math.sin(cameraState.phi) * Math.cos(cameraState.theta);
+            const y = dist * Math.cos(cameraState.phi);
+            const z = dist * Math.sin(cameraState.phi) * Math.sin(cameraState.theta);
+            fullViewCellData.camera.position.set(x, y, z);
+            fullViewCellData.camera.lookAt(0, 0, 0);
+        }
+
+        function enterFullView() {
+            if (selectedIndex === -1) return;
+            isFullView = true;
+            gridContainer.style.display = 'none';
+            fullViewContainer.classList.add('active');
+            initFullView();
+            resizeFullViewRenderer();
+            fullViewCellData.fn = cells[selectedIndex].fn;
+            updateMesh(fullViewCellData);
+            renderAll();
+        }
+
+        function exitFullView() {
+            isFullView = false;
+            fullViewContainer.classList.remove('active');
+            gridContainer.style.display = '';
+            resizeGrid();
+            renderAll();
+        }
+
+        viewFullBtn.addEventListener('click', enterFullView);
+        exitFullBtn.addEventListener('click', exitFullView);
+
+        function resetCamera() {
+            cameraState = { phi: Math.PI / 4, theta: Math.PI / 4, distance: 4 };
+            updateCameras();
+            renderAll();
+        }
+
+        resetCameraBtn.addEventListener('click', resetCamera);
+        resetCameraBtn2.addEventListener('click', resetCamera);
+
+        fullViewCanvas.addEventListener('mousedown', (e) => {
+            isDragging = false;
+            lastMouse = { x: e.clientX, y: e.clientY };
+            const onMove = (em) => {
+                const dx = em.clientX - lastMouse.x;
+                const dy = em.clientY - lastMouse.y;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) isDragging = true;
+                cameraState.theta += dx * 0.01;
+                cameraState.phi -= dy * 0.01;
+                cameraState.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraState.phi));
+                lastMouse = { x: em.clientX, y: em.clientY };
+                renderAll();
+            };
+            const onUp = () => {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+            };
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+        });
+
+        fullViewCanvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            cameraState.distance *= e.deltaY > 0 ? 1.1 : 0.9;
+            cameraState.distance = Math.max(1, Math.min(20, cameraState.distance));
+            renderAll();
+        }, { passive: false });
+
+        fullViewCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDragging = false;
+            const t = e.touches[0];
+            lastMouse = { x: t.clientX, y: t.clientY };
+        }, { passive: false });
+
+        fullViewCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (e.touches.length === 1) {
+                const t = e.touches[0];
+                const dx = t.clientX - lastMouse.x;
+                const dy = t.clientY - lastMouse.y;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) isDragging = true;
+                cameraState.theta += dx * 0.01;
+                cameraState.phi -= dy * 0.01;
+                cameraState.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraState.phi));
+                lastMouse = { x: t.clientX, y: t.clientY };
+                renderAll();
+            } else if (e.touches.length === 2) {
+                const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+                if (fullViewCanvas._lastPinchDist) {
+                    const delta = fullViewCanvas._lastPinchDist - d;
+                    cameraState.distance *= 1 + delta * 0.01;
+                    cameraState.distance = Math.max(1, Math.min(20, cameraState.distance));
+                    renderAll();
+                }
+                fullViewCanvas._lastPinchDist = d;
+            }
+        }, { passive: false });
+
+        fullViewCanvas.addEventListener('touchend', (e) => {
+            if (e.touches.length < 2) fullViewCanvas._lastPinchDist = null;
+        });
+
+
+        function watchDPR() {
+            const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+            mq.addEventListener('change', () => {
+                checkOrientation();
+                if (isFullView) resizeFullViewRenderer();
+                watchDPR();
+            }, { once: true });
+        }
+        watchDPR();
+
+        function updateTreeViewer() {
+            if (!currentSelectedTree) return;
+            if (treeViewer && treeViewer.contentWindow) {
+                const treeData = serializeNode(currentSelectedTree.root);
+                treeViewer.contentWindow.postMessage(treeData, '*');
+            }
+        }
+
+        treeViewer.addEventListener('load', () => updateTreeViewer());
+
+        cells.forEach(cell => {
+            let clickStart = null;
+
+            cell.div.addEventListener('mousedown', (e) => {
+                clickStart = { x: e.clientX, y: e.clientY };
+                isDragging = false;
+                lastMouse = { x: e.clientX, y: e.clientY };
+
+                const onMove = (em) => {
+                    const dx = em.clientX - lastMouse.x;
+                    const dy = em.clientY - lastMouse.y;
+
+                    if (Math.abs(em.clientX - clickStart.x) > 3 || Math.abs(em.clientY - clickStart.y) > 3) {
+                        isDragging = true;
+                    }
+
+                    const sensitivity = 0.01;
+                    cameraState.theta += dx * sensitivity;
+                    cameraState.phi -= dy * sensitivity;
+                    cameraState.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraState.phi));
+
+                    lastMouse = { x: em.clientX, y: em.clientY };
+                    updateCameras();
+                    renderAll();
+                };
+
+                const onUp = () => {
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+
+                    if (!isDragging) {
+                        selectCell(cell.index, true);
+                    }
+                };
+
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+            });
+
+            cell.div.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            cell.div.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                const t = e.touches[0];
+                clickStart = { x: t.clientX, y: t.clientY };
+                isDragging = false;
+                lastMouse = { x: t.clientX, y: t.clientY };
+            }, { passive: false });
+
+            cell.div.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+                const t = e.touches[0];
+                const dx = t.clientX - lastMouse.x;
+                const dy = t.clientY - lastMouse.y;
+                if (Math.abs(t.clientX - clickStart.x) > 5 || Math.abs(t.clientY - clickStart.y) > 5) isDragging = true;
+                cameraState.theta += dx * 0.01;
+                cameraState.phi -= dy * 0.01;
+                cameraState.phi = Math.max(0.1, Math.min(Math.PI - 0.1, cameraState.phi));
+                lastMouse = { x: t.clientX, y: t.clientY };
+                updateCameras();
+                renderAll();
+            }, { passive: false });
+
+            cell.div.addEventListener('touchend', () => {
+                if (!isDragging) selectCell(cell.index, true);
+            });
+        });
+
+        grid.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const zoomSpeed = 0.1;
+            if (e.deltaY < 0) {
+                cameraState.distance *= (1 - zoomSpeed);
+            } else {
+                cameraState.distance *= (1 + zoomSpeed);
+            }
+            cameraState.distance = Math.max(1, Math.min(20, cameraState.distance));
+            distSlider.value = cameraState.distance;
+            updateCameras();
+            renderAll();
+        }, { passive: false });
+
+        distSlider.addEventListener('input', () => {
+            cameraState.distance = parseFloat(distSlider.value);
+            updateCameras();
+            renderAll();
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                const target = selectedIndex !== -1 ? selectedIndex : 4;
+                selectCell(target, true);
+                if (selectedIndex === target) {
+                    parentFn = cells[target].fn.clone();
+                    spawnGeneration();
+                }
+            }
+        });
+
+        function loop() {
+            if (animBtn.checked) {
+                timeVal += animSpeed * animDir;
+                if (timeVal > 1 || timeVal < -1) {
+                    animDir *= -1;
+                    timeVal = Math.max(-1, Math.min(1, timeVal));
+                }
+                timeSlider.value = timeVal;
+                updateAllMeshes();
+                if (isFullView && fullViewCellData) updateMesh(fullViewCellData);
+            }
+            renderAll();
+            requestAnimationFrame(loop);
+        }
+
+        timeSlider.addEventListener('input', () => {
+            timeVal = parseFloat(timeSlider.value);
+            updateAllMeshes();
+            renderAll();
+        });
+
+        coordModeSelect.addEventListener('change', () => {
+            updateAllMeshes();
+            renderAll();
+        });
+
+        colorOutputSelect.addEventListener('change', () => {
+            updateAllMeshes();
+            if (selectedIndex !== -1) updateCodeDisplay(cells[selectedIndex].fn);
+            renderAll();
+        });
+
+        squishModeSelect.addEventListener('change', () => {
+            updateAllMeshes();
+            renderAll();
+        });
+
+        segInput.addEventListener('change', () => {
+            cells.forEach(c => {
+                c.geometry.dispose();
+                c.geometry = createGeometry();
+                c.mesh.geometry = c.geometry;
+                updateMesh(c);
+            });
+            renderAll();
+        });
+
+        init();
+    </script>
+</body>
+</html>

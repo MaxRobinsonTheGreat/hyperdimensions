@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "display": {
+    "autoRotate": true,
+    "showAxes": false,
+    "showSurface": true,
+    "showWireframe": false,
+    "dirIntensity": 1.2,
+    "shininess": 80,
+    "camera": {
+      "position": { "x": 10, "y": 10, "z": 8 },
+      "target": { "x": 0, "y": 0, "z": 0 }
+    }
+  },
+  "parameters": {
+    "uMin": 0,
+    "uMax": 6.28318,
+    "vMin": 0,
+    "vMax": 3.14159,
+    "uSegs": 250,
+    "vSegs": 250
+  },
+  "extraParameters": [
+    { "name": "baseRadius", "value": 2, "min": 1, "max": 4, "step": 0.01, "runtime": 5 },
+    { "name": "spineHeight", "value": 1.8, "min": 0, "max": 4, "step": 0.01, "runtime": 10 },
+    { "name": "spineFreqU", "value": 8, "min": 3, "max": 24, "step": 1, "runtime": 15 },
+    { "name": "spineFreqV", "value": 7, "min": 3, "max": 24, "step": 1, "runtime": 20 },
+    { "name": "sharpness", "value": 14, "min": 1, "max": 40, "step": 0.5, "runtime": 25 },
+    { "name": "bodyHue", "value": 0.76, "min": 0, "max": 1, "step": 0.01, "runtime": 40 },
+    { "name": "spineHue", "value": 0.08, "min": 0, "max": 1, "step": 0.01, "runtime": 55 }
+  ],
+  "surface": {
+    "code": "function surface(input) {\n    const u = input.u, v = input.v;\n    const R = input.baseRadius;\n    const H = input.spineHeight;\n    const fU = input.spineFreqU;\n    const fV = input.spineFreqV;\n    const sharp = input.sharpness;\n\n    const spineU = Math.pow(Math.abs(Math.sin(fU * u * 0.5)), sharp);\n    const spineV = Math.pow(Math.abs(Math.sin(fV * v)), sharp);\n    const spine = spineU * spineV;\n    const r = R + H * spine;\n\n    const x = r * Math.sin(v) * Math.cos(u);\n    const y = r * Math.sin(v) * Math.sin(u);\n    const z = r * Math.cos(v);\n\n    const t = spine;\n    const hue = input.bodyHue + (input.spineHue - input.bodyHue) * t;\n    const sat = 0.6 + 0.35 * t;\n    const val = 0.25 + 0.6 * t;\n\n    const h6 = ((hue % 1 + 1) % 1) * 6;\n    const i = Math.floor(h6), f = h6 - i;\n    const p = val*(1-sat), q = val*(1-sat*f), tv = val*(1-sat*(1-f));\n    let rr, gg, bb;\n    switch(i%6) {\n        case 0: rr=val;gg=tv;bb=p; break;\n        case 1: rr=q;gg=val;bb=p; break;\n        case 2: rr=p;gg=val;bb=tv; break;\n        case 3: rr=p;gg=q;bb=val; break;\n        case 4: rr=tv;gg=p;bb=val; break;\n        default: rr=val;gg=p;bb=q;\n    }\n    return { x, y, z, r: rr, g: gg, b: bb, a: 1 };\n}"
+  },
+  "outputs": {
+    "coordConversion": "none",
+    "rgbToHsv": false
+  }
+}

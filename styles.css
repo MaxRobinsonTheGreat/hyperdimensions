@@ -87,6 +87,17 @@ body {
     color: #fff;
 }
 
+.nav-link {
+    font-size: 11px;
+    color: #ccc;
+    background: #1e1e1e;
+    border: 1px solid #3a3a3a;
+    border-radius: 4px;
+    padding: 3px;
+    text-decoration: none;
+}
+.nav-link:hover { background: #2a2a2a; border-color: #555; color: #fff; }
+
 
 .header-panel {
     padding-top: 2px;

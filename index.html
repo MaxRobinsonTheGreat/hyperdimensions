@@ -10,6 +10,7 @@
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/codemirror.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.17/mode/javascript/javascript.min.js"></script>
     <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/10.0.0/math.min.js"></script>
+    <script defer src="function_trees.js"></script>
     <script type="importmap">
         {
             "imports": {
@@ -24,8 +25,12 @@
         <div id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-header-top">
-                    <h2>Function Controls</h2>
+                    <h2>Functions</h2>
                     <button id="toggleSidebar">«</button>
+                </div>
+                <div style="display:flex; gap:6px;">
+                    <a href="biomorphs.html" class="nav-link">Biomorphs</a>
+                    <a href="picbreeder.html" class="nav-link">Picbreeder</a>
                 </div>
             </div>
 
@@ -207,6 +212,15 @@
                                 <textarea id="surfaceEditor" spellcheck="false"></textarea>
                             </div>
                         </div>
+                        <div class="control-row" style="align-items: flex-end; margin-top: 8px;">
+                            <div class="control-group-inline">
+                                <button id="generateRandom">Generate Random Function</button>
+                            </div>
+                            <div class="control-group-inline">
+                                <label for="genComplexity">Complexity</label>
+                                <input type="number" id="genComplexity" min="1" max="20" value="5">
+                            </div>
+                        </div>
                         <div id="surfaceError" class="surface-error" style="display: none;"></div>
                     </div>
                 </div>
@@ -342,6 +356,8 @@ function surface(input) {
             const rect = viewport.getBoundingClientRect();
             const width = rect.width || window.innerWidth;
             const height = rect.height || window.innerHeight;
+            const dpr = window.devicePixelRatio || 1;
+            renderer.setPixelRatio(dpr);
             renderer.setSize(width, height);
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
@@ -817,6 +833,16 @@ function surface(input) {
         }
 
         window.addEventListener('resize', resizeRendererToViewport);
+
+        // Re-render at correct resolution when browser zoom changes (alters devicePixelRatio)
+        function watchDPR() {
+            const mq = window.matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`);
+            mq.addEventListener('change', () => {
+                resizeRendererToViewport();
+                watchDPR();
+            }, { once: true });
+        }
+        watchDPR();
         
         // --- UI Logic ---
         function setupUI() {
@@ -1706,6 +1732,51 @@ function surface(input) {
                     }
                 });
             }
+
+            const generateRandomBtn = document.getElementById('generateRandom');
+            const genComplexityInput = document.getElementById('genComplexity');
+
+            generateRandomBtn.addEventListener('click', () => {
+                const complexity = parseInt(genComplexityInput.value) || 5;
+                const container = document.getElementById('paramExtras');
+                const inputNames = ['u', 'v', 'd'];
+                if (container) {
+                    container.querySelectorAll('.param-name').forEach(input => {
+                        const name = input.value.trim();
+                        if (name && !inputNames.includes(name)) {
+                            inputNames.push(name);
+                        }
+                    });
+                }
+                const outputNames = ['x', 'y', 'z', 'r', 'g', 'b'];
+                const treeFunction = new TreeFunction(inputNames, outputNames, false);
+                treeFunction.randomizeTrees(complexity);
+                for (let i = 0; i < complexity; i++) {
+                    treeFunction.mutate();
+                }
+
+                const scale = 10;
+                const functionCode = `function surface(input) {
+    const u = input.u;
+    const v = input.v;
+${inputNames.slice(3).map(name => `    const ${name} = input.${name};`).join('\n')}
+    // euclidean distance from origin (including time if available)
+    const d = Math.sqrt(u*u + v*v${inputNames.includes('t') ? ' + t*t' : ''});
+    const sigmoid = (x) => 1 / (1 + Math.exp(-x));
+    return {
+        x: ${scale} * (${treeFunction.trees.x.getRawJS()}),
+        y: ${scale} * (${treeFunction.trees.y.getRawJS()}),
+        z: ${scale} * (${treeFunction.trees.z.getRawJS()}),
+        r: sigmoid(${treeFunction.trees.r.getRawJS()}),
+        g: sigmoid(${treeFunction.trees.g.getRawJS()}),
+        b: sigmoid(${treeFunction.trees.b.getRawJS()}),
+        a: 1
+    };
+}`;
+
+                editor.setValue(functionCode);
+                applySurface();
+            });
 
             const saveNameInput = document.getElementById('saveName');
             const downloadSaveBtn = document.getElementById('downloadSave');

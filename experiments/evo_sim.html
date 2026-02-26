@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evolutionary Bug Simulation</title>
+    <style>
+        body {
+            margin: 0;
+            background: #111;
+            color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            border: 1px solid #444;
+            background: #1a1a1a;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            pointer-events: none;
+            line-height: 1.5;
+            min-width: 200px;
+        }
+        .highlight {
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 8px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #444;
+            color: white;
+            border: 1px solid #666;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover { background: #555; }
+        input[type="number"] {
+            background: #333;
+            color: #eee;
+            border: 1px solid #555;
+            padding: 4px;
+            border-radius: 4px;
+            width: 50px;
+        }
+        .setting {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        Population: <span id="popDisplay" class="highlight">0</span><br>
+        Food Count: <span id="foodDisplay">0</span><br>
+        Avg Age: <span id="ageDisplay">0.0</span>s<br>
+        Born: <span id="bornDisplay">0</span>
+    </div>
+    
+    <div class="control-panel">
+        <div class="setting">
+            <label>Lifespan (s)</label>
+            <input type="number" id="lifespanInput" value="20" min="5" max="100">
+        </div>
+        <div class="setting">
+            <label>Food Req</label>
+            <input type="number" id="foodReqInput" value="3" min="1" max="50">
+        </div>
+        <div class="setting">
+            <label>Min Pop</label>
+            <input type="number" id="minPopInput" value="20" min="0" max="100">
+        </div>
+        <button onclick="restart()">Reset World</button>
+        <button onclick="injectBugs(10)">Inject 10 Bugs</button>
+    </div>
+
+    <canvas id="simCanvas"></canvas>
+
+    <script src="function_trees.js"></script>
+    <script>
+        const canvas = document.getElementById('simCanvas');
+        const ctx = canvas.getContext('2d');
+        const popDisplay = document.getElementById('popDisplay');
+        const foodDisplay = document.getElementById('foodDisplay');
+        const ageDisplay = document.getElementById('ageDisplay');
+        const bornDisplay = document.getElementById('bornDisplay');
+        const lifespanInput = document.getElementById('lifespanInput');
+        const foodReqInput = document.getElementById('foodReqInput');
+        const minPopInput = document.getElementById('minPopInput');
+
+        // Simulation Constants
+        const WIDTH = 1200;
+        const HEIGHT = 800;
+        const FPS = 60;
+        const INITIAL_POP = 50;
+        
+        const SENSOR_RANGE = 150;
+        const SENSOR_ANGLES = [-0.6, 0, 0.6]; // ~ +/- 35 degrees
+        
+        const BUG_RADIUS = 6;
+        const BUG_SPEED_CAP = 4;
+        const BUG_TURN_CAP = 0.15;
+        
+        // Mutables
+        let BUG_LIFESPAN = 20; // seconds
+        let FOOD_TO_REPRODUCE = 3;
+        let MIN_POP = 20;
+        
+        const NUM_OBSTACLES = 12;
+        const OBSTACLE_MIN_R = 30;
+        const OBSTACLE_MAX_R = 70;
+        
+        const FOOD_RADIUS = 4;
+        const MAX_FOOD = 100;
+        const FOOD_SPAWN_RATE = 0.5; // Chance per frame
+
+        canvas.width = WIDTH;
+        canvas.height = HEIGHT;
+
+        // Event Listeners for settings
+        lifespanInput.addEventListener('input', (e) => BUG_LIFESPAN = parseFloat(e.target.value));
+        foodReqInput.addEventListener('input', (e) => FOOD_TO_REPRODUCE = parseFloat(e.target.value));
+        minPopInput.addEventListener('input', (e) => MIN_POP = parseFloat(e.target.value));
+
+        // Canvas Interaction
+        let isDrawing = false;
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            spawnFoodAtMouse(e);
+        });
+        canvas.addEventListener('mousemove', (e) => {
+            if (isDrawing) spawnFoodAtMouse(e);
+        });
+        canvas.addEventListener('mouseup', () => isDrawing = false);
+        canvas.addEventListener('mouseleave', () => isDrawing = false);
+
+        function spawnFoodAtMouse(e) {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            
+            // Limit density slightly
+            if (foods.length < MAX_FOOD + 200) { // allow overfilling with manual draw
+                foods.push({x, y});
+            }
+        }
+
+        // State
+        let bugs = [];
+        let obstacles = [];
+        let foods = [];
+        let totalBorn = 0;
+        let animationId;
+        
+        // --- Geometry Helpers ---
+
+        function distSq(x1, y1, x2, y2) {
+            let dx = Math.abs(x1 - x2);
+            if (dx > WIDTH/2) dx = WIDTH - dx;
+            let dy = Math.abs(y1 - y2);
+            if (dy > HEIGHT/2) dy = HEIGHT - dy;
+            return dx*dx + dy*dy;
+        }
+        
+        function getClosestRelative(x, y, tx, ty) {
+            let dx = tx - x;
+            let dy = ty - y;
+            if (dx > WIDTH/2) dx -= WIDTH;
+            else if (dx < -WIDTH/2) dx += WIDTH;
+            if (dy > HEIGHT/2) dy -= HEIGHT;
+            else if (dy < -HEIGHT/2) dy += HEIGHT;
+            return {x: x + dx, y: y + dy};
+        }
+
+        function rayCircle(rx, ry, rvx, rvy, cx, cy, cr) {
+            const fx = rx - cx;
+            const fy = ry - cy;
+            const a = rvx*rvx + rvy*rvy;
+            const b = 2 * (fx*rvx + fy*rvy);
+            const c = (fx*fx + fy*fy) - cr*cr;
+            let disc = b*b - 4*a*c;
+            if (disc < 0) return Infinity;
+            disc = Math.sqrt(disc);
+            const t1 = (-b - disc) / (2*a);
+            if (t1 >= 0) return t1;
+            return Infinity;
+        }
+
+        // --- Classes ---
+
+        class Bug {
+            constructor(brain = null, x=null, y=null) {
+                this.x = x !== null ? x : Math.random() * WIDTH;
+                this.y = y !== null ? y : Math.random() * HEIGHT;
+                
+                // Always check collision and find safe spot if needed
+                let safe = false;
+                let attempts = 0;
+                while(!safe && attempts < 50) {
+                     let hit = false;
+                     for(let obs of obstacles) {
+                         if(distSq(this.x, this.y, obs.x, obs.y) < (obs.r + BUG_RADIUS + 10)**2) hit = true;
+                     }
+                     if(!hit) safe = true;
+                     else {
+                         this.x = Math.random() * WIDTH;
+                         this.y = Math.random() * HEIGHT;
+                     }
+                     attempts++;
+                }
+
+                this.angle = Math.random() * Math.PI * 2;
+                this.dead = false;
+                this.color = `hsl(${Math.random()*360}, 80%, 60%)`;
+                this.age = 0;
+                this.foodEaten = 0;
+                this.sensors = [];
+                
+                // Brain
+                const inputNames = ['oL', 'fL', 'oC', 'fC', 'oR', 'fR'];
+                const outputNames = ['thrust', 'turn'];
+
+                if (brain) {
+                    this.brain = brain;
+                } else {
+                    this.brain = new TreeFunction(inputNames, outputNames);
+                    this.brain.randomizeTrees(5);
+                }
+            }
+
+            update() {
+                if (this.dead) return;
+
+                // Age check
+                this.age += 1/FPS;
+                if (this.age > BUG_LIFESPAN) {
+                    this.dead = true;
+                    return;
+                }
+
+                // 1. Sense
+                const inputs = {};
+                this.sensors = [];
+
+                for (let i = 0; i < 3; i++) {
+                    const angleOffset = SENSOR_ANGLES[i];
+                    const rayAngle = this.angle + angleOffset;
+                    const rvx = Math.cos(rayAngle);
+                    const rvy = Math.sin(rayAngle);
+
+                    let distObs = SENSOR_RANGE;
+                    let distFood = SENSOR_RANGE;
+
+                    // Obstacles
+                    for (let obs of obstacles) {
+                        const rel = getClosestRelative(this.x, this.y, obs.x, obs.y);
+                        // Optimization
+                        if (Math.abs(rel.x - this.x) > SENSOR_RANGE + obs.r || Math.abs(rel.y - this.y) > SENSOR_RANGE + obs.r) continue;
+
+                        const d = rayCircle(this.x, this.y, rvx, rvy, rel.x, rel.y, obs.r);
+                        if (d < distObs) distObs = d;
+                    }
+
+                    // Food
+                    for (let f of foods) {
+                        const rel = getClosestRelative(this.x, this.y, f.x, f.y);
+                        if (Math.abs(rel.x - this.x) > SENSOR_RANGE + FOOD_RADIUS*2.5 || Math.abs(rel.y - this.y) > SENSOR_RANGE + FOOD_RADIUS*2.5) continue;
+                        
+                        const d = rayCircle(this.x, this.y, rvx, rvy, rel.x, rel.y, FOOD_RADIUS * 2.5);
+                        if (d < distFood) distFood = d;
+                    }
+
+                    this.sensors.push({
+                        angle: rayAngle,
+                        len: Math.min(distObs, SENSOR_RANGE),
+                        sawFood: distFood < SENSOR_RANGE
+                    });
+
+                    // Inputs (1=Touch, 0=Far)
+                    const prefix = ['L', 'C', 'R'][i];
+                    inputs[`o${prefix}`] = 1 - (Math.min(distObs, SENSOR_RANGE) / SENSOR_RANGE);
+                    inputs[`f${prefix}`] = 1 - (Math.min(distFood, SENSOR_RANGE) / SENSOR_RANGE);
+                }
+
+                // 2. Think
+                const output = this.brain.eval(inputs);
+                const thrust = (Math.tanh(output.thrust || 0) + 1) / 2; 
+                const turn = Math.tanh(output.turn || 0);
+
+                // 3. Act
+                this.angle += turn * BUG_TURN_CAP;
+                const speed = thrust * BUG_SPEED_CAP;
+                this.x += Math.cos(this.angle) * speed;
+                this.y += Math.sin(this.angle) * speed;
+
+                // 4. Wrap and sanitize coordinates
+                if (!isFinite(this.x)) this.x = Math.random() * WIDTH;
+                if (!isFinite(this.y)) this.y = Math.random() * HEIGHT;
+                if (this.x < 0) this.x += WIDTH;
+                else if (this.x >= WIDTH) this.x -= WIDTH;
+                if (this.y < 0) this.y += HEIGHT;
+                else if (this.y >= HEIGHT) this.y -= HEIGHT;
+
+                // 5. Collision (Obstacles)
+                for (let obs of obstacles) {
+                    if (distSq(this.x, this.y, obs.x, obs.y) < (obs.r + BUG_RADIUS)**2) {
+                        this.dead = true; return;
+                    }
+                }
+
+                // 6. Eat
+                for (let i = foods.length - 1; i >= 0; i--) {
+                    const f = foods[i];
+                    if (distSq(this.x, this.y, f.x, f.y) < (FOOD_RADIUS + BUG_RADIUS + 4)**2) {
+                        foods.splice(i, 1);
+                        this.foodEaten++;
+                    }
+                }
+            }
+
+            reproduce() {
+                this.foodEaten -= FOOD_TO_REPRODUCE;
+                const childBrain = this.brain.clone();
+                childBrain.mutate();
+                childBrain.mutate();
+                
+                // Spawn on top of parent (this.x, this.y)
+                const child = new Bug(childBrain, this.x, this.y);
+                child.color = this.color;
+                return child;
+            }
+
+            draw(ctx) {
+                // Sensors
+                ctx.lineWidth = 1;
+                for(let s of this.sensors) {
+                    ctx.strokeStyle = s.sawFood ? 'rgba(50, 255, 50, 0.4)' : 'rgba(255, 255, 255, 0.1)';
+                    if (s.len < SENSOR_RANGE) ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
+                    ctx.beginPath();
+                    ctx.moveTo(this.x, this.y);
+                    ctx.lineTo(this.x + Math.cos(s.angle)*s.len, this.y + Math.sin(s.angle)*s.len);
+                    ctx.stroke();
+                }
+
+                // Body
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, BUG_RADIUS, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Head
+                ctx.fillStyle = '#fff';
+                ctx.beginPath();
+                ctx.arc(this.x + Math.cos(this.angle)*4, this.y + Math.sin(this.angle)*4, 2, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Food Indicator
+                if (this.foodEaten > 0) {
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    // Don't reset to 0 in draw, show progress to next level
+                    const progress = Math.min(1, this.foodEaten / FOOD_TO_REPRODUCE);
+                    const arcLen = progress * Math.PI * 2;
+                    ctx.arc(this.x, this.y, BUG_RADIUS + 4, -Math.PI/2, -Math.PI/2 + arcLen);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // --- Logic ---
+
+        function initWorld() {
+            obstacles = [];
+            foods = [];
+            bugs = [];
+            totalBorn = 0;
+            
+            // Random Obstacles
+            for (let i = 0; i < NUM_OBSTACLES; i++) {
+                let valid = false;
+                let attempts = 0;
+                while(!valid && attempts < 100) {
+                    const r = OBSTACLE_MIN_R + Math.random()*(OBSTACLE_MAX_R - OBSTACLE_MIN_R);
+                    const x = Math.random() * WIDTH;
+                    const y = Math.random() * HEIGHT;
+                    
+                    let hit = false;
+                    for(let obs of obstacles) {
+                        if (distSq(x,y,obs.x,obs.y) < (r + obs.r + 20)**2) hit = true;
+                    }
+                    if(!hit) {
+                        obstacles.push({x,y,r});
+                        valid = true;
+                    }
+                    attempts++;
+                }
+            }
+        }
+
+        function injectBugs(count) {
+            for(let i=0; i<count; i++) {
+                bugs.push(new Bug());
+                totalBorn++;
+            }
+        }
+
+        function spawnFood() {
+            if (foods.length >= MAX_FOOD) return;
+            const x = Math.random() * WIDTH;
+            const y = Math.random() * HEIGHT;
+            for(let obs of obstacles) {
+                if (distSq(x,y,obs.x,obs.y) < (obs.r + FOOD_RADIUS)**2) return;
+            }
+            foods.push({x, y});
+        }
+
+        function restart() {
+            if (animationId) cancelAnimationFrame(animationId);
+            // Re-read inputs just in case
+            BUG_LIFESPAN = parseFloat(lifespanInput.value) || 20;
+            FOOD_TO_REPRODUCE = parseFloat(foodReqInput.value) || 3;
+            
+            initWorld();
+            injectBugs(INITIAL_POP);
+            loop();
+        }
+
+        function loop() {
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+            
+            // World Border (Dashed)
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 2;
+            ctx.setLineDash([10, 10]);
+            ctx.strokeRect(0, 0, WIDTH, HEIGHT);
+            ctx.setLineDash([]);
+
+            if (Math.random() < FOOD_SPAWN_RATE) spawnFood();
+
+            // Draw Obstacles
+            ctx.fillStyle = '#422';
+            ctx.strokeStyle = '#844';
+            ctx.lineWidth = 2;
+            for (let obs of obstacles) {
+                ctx.beginPath();
+                ctx.arc(obs.x, obs.y, obs.r, 0, Math.PI*2);
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            // Draw Food
+            ctx.fillStyle = '#4f4';
+            for (let f of foods) {
+                ctx.beginPath();
+                ctx.arc(f.x, f.y, FOOD_RADIUS, 0, Math.PI*2);
+                ctx.fill();
+            }
+
+            // Update Bugs
+            let newBugs = [];
+            let drawnCount = 0;
+            let avgAge = 0;
+            
+            for (let i = bugs.length - 1; i >= 0; i--) {
+                const bug = bugs[i];
+                bug.update();
+                
+                if (bug.dead) {
+                    bugs.splice(i, 1);
+                    continue;
+                }
+                
+                bug.draw(ctx);
+                drawnCount++;
+                avgAge += bug.age;
+                
+                // Check Reproduction
+                if (bug.foodEaten >= FOOD_TO_REPRODUCE) {
+                    const child = bug.reproduce();
+                    newBugs.push(child);
+                    totalBorn++;
+                    
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 4;
+                    ctx.beginPath();
+                    ctx.arc(bug.x, bug.y, BUG_RADIUS * 3, 0, Math.PI*2);
+                    ctx.stroke();
+                }
+            }
+            
+            // Add babies to array and draw them
+            for (let child of newBugs) {
+                bugs.push(child);
+                child.draw(ctx);
+                drawnCount++;
+            }
+
+            // Min Population Check - add and draw new bugs
+            while (bugs.length < MIN_POP) {
+                const newBug = new Bug();
+                bugs.push(newBug);
+                newBug.draw(ctx);
+                drawnCount++;
+                totalBorn++;
+            }
+
+            // UI
+            if (drawnCount > 0) avgAge /= drawnCount;
+            popDisplay.textContent = drawnCount;
+            foodDisplay.textContent = foods.length;
+            ageDisplay.textContent = avgAge.toFixed(1);
+            bornDisplay.textContent = totalBorn;
+
+            animationId = requestAnimationFrame(loop);
+        }
+
+        window.onload = restart;
+    </script>
+</body>
+</html>
